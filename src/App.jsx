@@ -93,9 +93,11 @@ function getRole(n) {
 }
 
 function getUsed(recs, name) {
-  const u = { Annual: 0, Casual: 0, Sick: 0 };
+  const u = { Annual: 0, Casual: 0, Sick: 0, Maternity: 0, Bereavement: 0 };
   recs.filter(r => r.name === name && r.status !== "Rejected").forEach(r => {
     if (u[r.type] !== undefined) u[r.type] += Number(r.days) || 0;
+    else if (r.type && r.type.includes("Maternity")) u.Maternity += Number(r.days) || 0;
+    else if (r.type && r.type.includes("Bereavement")) u.Bereavement += Number(r.days) || 0;
   });
   return u;
 }
@@ -404,6 +406,18 @@ function Analytics({ records, user }) {
   const cardStyle = { background: "var(--card)", borderRadius: 12, padding: "16px 20px", border: "1px solid var(--border)" };
 
   // Drill-down detail table
+  // Special leave type display with flag
+  const TypeBadge = ({ type }) => {
+    const isSpecial = type && (type.includes("Maternity") || type.includes("Bereavement"));
+    const color = type && type.includes("Maternity") ? "#8b5cf6" : type && type.includes("Bereavement") ? "#ec4899" : "var(--text)";
+    const shortName = type && type.includes("Maternity") ? "Mat/Pat" : type && type.includes("Bereavement") ? "Bereavement" : type;
+    return isSpecial ? (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+        <span style={{ padding: "1px 7px", borderRadius: 4, background: color + "20", color: color, fontSize: 10, fontWeight: 700 }}>⚡ {shortName}</span>
+      </span>
+    ) : <span>{type}</span>;
+  };
+
   const DrillPanel = ({ title, data, onClose }) => (
     <div style={{ ...cardStyle, marginTop: 12, border: "1px solid var(--accent)", background: "var(--hover)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -424,9 +438,9 @@ function Analytics({ records, user }) {
             </thead>
             <tbody>
               {data.map((r, i) => (
-                <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                   <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
-                  <td style={{ padding: "7px 10px" }}>{r.type}</td>
+                  <td style={{ padding: "7px 10px" }}><TypeBadge type={r.type} /></td>
                   <td style={{ padding: "7px 10px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                   <td style={{ padding: "7px 10px", fontSize: 11, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                   <td style={{ padding: "7px 10px", fontSize: 11 }}>{r.lead}</td>
@@ -496,9 +510,9 @@ function Analytics({ records, user }) {
             </thead>
             <tbody>
               {offOnDate.map((r, i) => (
-                <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                   <td style={{ padding: "8px 12px", fontWeight: 600 }}>{r.name}</td>
-                  <td style={{ padding: "8px 12px" }}>{r.type}</td>
+                  <td style={{ padding: "8px 12px" }}><TypeBadge type={r.type} /></td>
                   <td style={{ padding: "8px 12px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                   <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                   <td style={{ padding: "8px 12px", fontSize: 12 }}>{r.lead}</td>
@@ -615,9 +629,9 @@ function Analytics({ records, user }) {
                   ))}
                 </tr></thead>
                 <tbody>{weekDrill.records.map((r, i) => (
-                  <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                     <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
-                    <td style={{ padding: "7px 10px" }}>{r.type}</td>
+                    <td style={{ padding: "7px 10px" }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "7px 10px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                     <td style={{ padding: "7px 10px", fontSize: 11, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "7px 10px", fontSize: 11 }}>{r.lead}</td>
@@ -767,7 +781,7 @@ function Analytics({ records, user }) {
                     onClick={() => setSelectedDate(toISO(r.startDate) || selectedDate)}
                   >
                     <td style={{ padding: "8px 12px", fontWeight: 600 }}>{r.name}</td>
-                    <td style={{ padding: "8px 12px" }}>{r.type}</td>
+                    <td style={{ padding: "8px 12px" }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "8px 12px" }}>
                       <span style={{
                         fontWeight: 700, padding: "2px 8px", borderRadius: 6, fontSize: 12,
@@ -1395,7 +1409,7 @@ export default function DakotaLMS() {
             return true;
           });
 
-          const teamTotal = filtered.reduce((s, d) => ({ a: s.a + d.Annual, c: s.c + d.Casual, si: s.si + d.Sick }), { a: 0, c: 0, si: 0 });
+          const teamTotal = filtered.reduce((s, d) => ({ a: s.a + d.Annual, c: s.c + d.Casual, si: s.si + d.Sick, m: s.m + d.Maternity, b: s.b + d.Bereavement }), { a: 0, c: 0, si: 0, m: 0, b: 0 });
 
           return (
           <div>
@@ -1460,49 +1474,56 @@ export default function DakotaLMS() {
             <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--hover)" }}>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Employee</th>
-                  {!teamLeadFilter && <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Lead</th>}
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Annual</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Casual</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Sick</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11, borderLeft: "2px solid var(--border)" }}>Total Leaves</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Total Left</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Employee</th>
+                  {!teamLeadFilter && <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Lead</th>}
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Annual</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Left</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Casual</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Left</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Sick</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Left</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#8b5cf6", fontSize: 10, borderLeft: "2px solid var(--border)" }}>Mat/Pat</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#ec4899", fontSize: 10 }}>Bereave</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10, borderLeft: "2px solid var(--border)" }}>Total Leaves</th>
+                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Total Left</th>
                 </tr></thead>
                 <tbody>{filtered.map(d => {
                   const totalTaken = d.Annual + d.Casual + d.Sick;
                   const totalBal = (BAL.Annual + BAL.Casual + BAL.Sick);
                   const totalLeft = totalBal - totalTaken;
+                  const allTaken = totalTaken + d.Maternity + d.Bereavement;
                   return (
                   <tr key={d.name} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "8px 14px", fontWeight: 600 }}>{d.name}</td>
-                    {!teamLeadFilter && <td style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>{d.lead}</td>}
-                    <td style={{ padding: "8px 14px" }}>{d.Annual}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Annual - d.Annual <= 2 ? "#ef4444" : BAL.Annual - d.Annual <= 5 ? "#d97706" : "var(--accent)" }}>{BAL.Annual - d.Annual}</td>
-                    <td style={{ padding: "8px 14px" }}>{d.Casual}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Casual - d.Casual <= 2 ? "#ef4444" : BAL.Casual - d.Casual <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Casual - d.Casual}</td>
-                    <td style={{ padding: "8px 14px" }}>{d.Sick}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Sick - d.Sick <= 2 ? "#ef4444" : BAL.Sick - d.Sick <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Sick - d.Sick}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 700, borderLeft: "2px solid var(--border)" }}>{totalTaken}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 700, color: totalLeft < 5 ? "#ef4444" : totalLeft < 10 ? "#d97706" : "var(--accent)" }}>{totalLeft}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 600, fontSize: 12 }}>{d.name}</td>
+                    {!teamLeadFilter && <td style={{ padding: "8px 12px", fontSize: 11, color: "var(--muted)" }}>{d.lead}</td>}
+                    <td style={{ padding: "8px 12px" }}>{d.Annual}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 600, color: BAL.Annual - d.Annual <= 2 ? "#ef4444" : BAL.Annual - d.Annual <= 5 ? "#d97706" : "var(--accent)" }}>{BAL.Annual - d.Annual}</td>
+                    <td style={{ padding: "8px 12px" }}>{d.Casual}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 600, color: BAL.Casual - d.Casual <= 2 ? "#ef4444" : BAL.Casual - d.Casual <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Casual - d.Casual}</td>
+                    <td style={{ padding: "8px 12px" }}>{d.Sick}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 600, color: BAL.Sick - d.Sick <= 2 ? "#ef4444" : BAL.Sick - d.Sick <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Sick - d.Sick}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 600, borderLeft: "2px solid var(--border)", color: d.Maternity > 0 ? "#8b5cf6" : "var(--muted)" }}>{d.Maternity || "—"}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 600, color: d.Bereavement > 0 ? "#ec4899" : "var(--muted)" }}>{d.Bereavement || "—"}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 700, borderLeft: "2px solid var(--border)" }}>{allTaken}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 700, color: totalLeft < 5 ? "#ef4444" : totalLeft < 10 ? "#d97706" : "var(--accent)" }}>{totalLeft}</td>
                   </tr>
                   );
                 })}</tbody>
                 {filtered.length > 1 && (
                   <tfoot>
                     <tr style={{ borderTop: "2px solid var(--border)", background: "var(--hover)" }}>
-                      <td style={{ padding: "8px 14px", fontWeight: 800, fontSize: 12 }}>TOTAL ({filtered.length})</td>
-                      {!teamLeadFilter && <td style={{ padding: "8px 14px" }}></td>}
-                      <td style={{ padding: "8px 14px", fontWeight: 700 }}>{teamTotal.a}</td>
-                      <td style={{ padding: "8px 14px" }}></td>
-                      <td style={{ padding: "8px 14px", fontWeight: 700 }}>{teamTotal.c}</td>
-                      <td style={{ padding: "8px 14px" }}></td>
-                      <td style={{ padding: "8px 14px", fontWeight: 700 }}>{teamTotal.si}</td>
-                      <td style={{ padding: "8px 14px" }}></td>
-                      <td style={{ padding: "8px 14px", fontWeight: 800, borderLeft: "2px solid var(--border)" }}>{teamTotal.a + teamTotal.c + teamTotal.si}</td>
-                      <td style={{ padding: "8px 14px" }}></td>
+                      <td style={{ padding: "8px 12px", fontWeight: 800, fontSize: 11 }}>TOTAL ({filtered.length})</td>
+                      {!teamLeadFilter && <td style={{ padding: "8px 12px" }}></td>}
+                      <td style={{ padding: "8px 12px", fontWeight: 700 }}>{teamTotal.a}</td>
+                      <td style={{ padding: "8px 12px" }}></td>
+                      <td style={{ padding: "8px 12px", fontWeight: 700 }}>{teamTotal.c}</td>
+                      <td style={{ padding: "8px 12px" }}></td>
+                      <td style={{ padding: "8px 12px", fontWeight: 700 }}>{teamTotal.si}</td>
+                      <td style={{ padding: "8px 12px" }}></td>
+                      <td style={{ padding: "8px 12px", fontWeight: 700, borderLeft: "2px solid var(--border)", color: "#8b5cf6" }}>{teamTotal.m || "—"}</td>
+                      <td style={{ padding: "8px 12px", fontWeight: 700, color: "#ec4899" }}>{teamTotal.b || "—"}</td>
+                      <td style={{ padding: "8px 12px", fontWeight: 800, borderLeft: "2px solid var(--border)" }}>{teamTotal.a + teamTotal.c + teamTotal.si + teamTotal.m + teamTotal.b}</td>
+                      <td style={{ padding: "8px 12px" }}></td>
                     </tr>
                   </tfoot>
                 )}
