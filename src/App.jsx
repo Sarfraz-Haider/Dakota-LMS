@@ -335,7 +335,10 @@ function Analytics({ records, user }) {
     typeBreakdown[r.type].records.push(r);
   });
 
-  const extendedLeaves = records.filter(r => r.status !== "Rejected" && Number(r.days) >= 3).sort((a, b) => Number(b.days) - Number(a.days));
+  const extendedLeaves = records.filter(r => r.status !== "Rejected" && Number(r.days) >= 3).sort((a, b) => {
+    const da = toISO(a.startDate) || "", db = toISO(b.startDate) || "";
+    return db.localeCompare(da);
+  });
 
   const cardStyle = { background: "var(--card)", borderRadius: 12, padding: "16px 20px", border: "1px solid var(--border)" };
 
@@ -559,7 +562,7 @@ function Analytics({ records, user }) {
       {/* ── Extended Leaves ── */}
       <div style={{ ...cardStyle }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>⚠️ Extended Leaves (3+ Days)</div>
-        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>Sorted by duration. Click a row to see full period.</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>Sorted by most recent. Click a row to see full period.</div>
         {extendedLeaves.length === 0 ? (
           <div style={{ padding: "12px", borderRadius: 8, background: "var(--hover)", color: "var(--muted)", fontSize: 13, textAlign: "center" }}>No extended leaves found</div>
         ) : (
