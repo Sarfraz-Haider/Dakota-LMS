@@ -888,9 +888,10 @@ export default function DakotaLMS() {
   const [syncing, setSyncing] = useState(false);
   const [ready, setReady] = useState(false);
   const [fetchErr, setFetchErr] = useState("");
-  const [sortCol, setSortCol] = useState("date");
-  const [sortDir, setSortDir] = useState("desc");
-  const [dashSort, setDashSort] = useState({ col: "date", dir: "desc" });
+  const [filters, setFilters] = useState({ name: "", type: "", lead: "", status: "" });
+  const [dashFilters, setDashFilters] = useState({ name: "", type: "", lead: "", status: "" });
+  const [activeFilter, setActiveFilter] = useState(null);
+  const [activeDashFilter, setActiveDashFilter] = useState(null);
 
   // Fetch records from Google Sheet
   const fetchData = async () => {
@@ -950,37 +951,59 @@ export default function DakotaLMS() {
   const teamRecs = isApprover ? (showAllTeam ? records : records.filter(r => r.lead === user)) : [];
   const canManage = (r) => isApprover && (r.lead === user || MANAGERS.includes(user));
 
-  // Sort helper
-  const sortRecords = (recs, col, dir) => {
-    const sorted = [...recs].sort((a, b) => {
-      let va = "", vb = "";
-      if (col === "name") { va = a.name; vb = b.name; }
-      else if (col === "type") { va = a.type; vb = b.type; }
-      else if (col === "days") { return dir === "asc" ? (Number(a.days) - Number(b.days)) : (Number(b.days) - Number(a.days)); }
-      else if (col === "lead") { va = a.lead; vb = b.lead; }
-      else if (col === "status") { va = a.status || "Pending"; vb = b.status || "Pending"; }
-      else if (col === "date") { va = toISO(a.startDate) || ""; vb = toISO(b.startDate) || ""; }
-      else { va = toISO(a.startDate) || ""; vb = toISO(b.startDate) || ""; }
-      if (va < vb) return dir === "asc" ? -1 : 1;
-      if (va > vb) return dir === "asc" ? 1 : -1;
-      return 0;
+  // Filter helper
+  const applyFilters = (recs, f) => {
+    return recs.filter(r => {
+      if (f.name && r.name !== f.name) return false;
+      if (f.type && r.type !== f.type) return false;
+      if (f.lead && r.lead !== f.lead) return false;
+      if (f.status) {
+        const rs = r.status || "Pending";
+        if (rs !== f.status) return false;
+      }
+      return true;
     });
-    return sorted;
   };
 
-  const toggleSort = (col, currentCol, currentDir, setCol, setDir) => {
-    if (currentCol === col) setDir(currentDir === "asc" ? "desc" : "asc");
-    else { setCol(col); setDir("asc"); }
+  // Filter dropdown component
+  const FilterHeader = ({ label, col, options, filterState, setFilterState, activeFilterState, setActiveFilterState }) => {
+    const isOpen = activeFilterState === col;
+    const isFiltered = filterState[col] !== "";
+    return (
+      <th style={{ padding: "8px 14px", textAlign: "left", fontSize: 11, position: "relative", fontWeight: 600 }}>
+        <div onClick={() => setActiveFilterState(isOpen ? null : col)}
+          style={{ cursor: "pointer", userSelect: "none", display: "flex", alignItems: "center", gap: 4, color: isFiltered ? "var(--accent)" : "var(--muted)" }}>
+          {label} {isFiltered ? "✕" : "▼"}
+        </div>
+        {isOpen && (
+          <div style={{
+            position: "absolute", top: "100%", left: 0, zIndex: 50, minWidth: 180, maxHeight: 250, overflow: "auto",
+            background: "var(--card)", border: "1px solid var(--border)", borderRadius: 10, boxShadow: "0 10px 30px rgba(0,0,0,0.2)", marginTop: 2,
+          }}>
+            <div onClick={() => { setFilterState(p => ({ ...p, [col]: "" })); setActiveFilterState(null); }}
+              style={{ padding: "8px 12px", fontSize: 12, cursor: "pointer", fontWeight: 600, color: "var(--accent)", borderBottom: "1px solid var(--border)" }}
+              onMouseEnter={e => e.currentTarget.style.background = "var(--hover)"}
+              onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+            >Show All</div>
+            {options.map(opt => (
+              <div key={opt} onClick={() => { setFilterState(p => ({ ...p, [col]: opt })); setActiveFilterState(null); }}
+                style={{
+                  padding: "8px 12px", fontSize: 12, cursor: "pointer",
+                  background: filterState[col] === opt ? "var(--accent-bg)" : "transparent",
+                  fontWeight: filterState[col] === opt ? 600 : 400,
+                  color: filterState[col] === opt ? "var(--accent)" : "var(--text)",
+                }}
+                onMouseEnter={e => e.currentTarget.style.background = filterState[col] === opt ? "var(--accent-bg)" : "var(--hover)"}
+                onMouseLeave={e => e.currentTarget.style.background = filterState[col] === opt ? "var(--accent-bg)" : "transparent"}
+              >{opt}</div>
+            ))}
+          </div>
+        )}
+      </th>
+    );
   };
 
-  const SortHeader = ({ label, col, activeCol, activeDir, onSort }) => (
-    <th onClick={() => onSort(col)} style={{
-      padding: "8px 14px", textAlign: "left", fontWeight: 600, color: activeCol === col ? "var(--accent)" : "var(--muted)",
-      fontSize: 11, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap",
-    }}>
-      {label} {activeCol === col ? (activeDir === "asc" ? "▲" : "▼") : "⇅"}
-    </th>
-  );
+  const activeFilterCount = (f) => Object.values(f).filter(v => v !== "").length;
 
   const allTabs = [
     { id: "dashboard", icon: "📊", label: "Dashboard" },
@@ -1080,19 +1103,24 @@ export default function DakotaLMS() {
               )}
             </div>
             <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
-              <div style={{ padding: "12px 16px", fontWeight: 700, fontSize: 14, borderBottom: "1px solid var(--border)" }}>
-                Recent Activity {role === "employee" ? "(Your Requests)" : role === "lead" ? "(Your Team)" : "(All)"}
+              <div style={{ padding: "12px 16px", fontWeight: 700, fontSize: 14, borderBottom: "1px solid var(--border)", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <span>Recent Activity {role === "employee" ? "(Your Requests)" : role === "lead" ? "(Your Team)" : "(All)"}</span>
+                {activeFilterCount(dashFilters) > 0 && (
+                  <button onClick={() => setDashFilters({ name: "", type: "", lead: "", status: "" })} style={{ fontSize: 11, padding: "3px 10px", borderRadius: 6, border: "1px solid var(--accent)", background: "var(--accent-bg)", color: "var(--accent)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                    Clear {activeFilterCount(dashFilters)} filter{activeFilterCount(dashFilters) > 1 ? "s" : ""}
+                  </button>
+                )}
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--hover)" }}>
-                  <SortHeader label="Name" col="name" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
-                  <SortHeader label="Type" col="type" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
-                  <SortHeader label="Days" col="days" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
-                  <SortHeader label="Period" col="date" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
-                  <SortHeader label="Lead" col="lead" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
-                  <SortHeader label="Status" col="status" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
+                  <FilterHeader label="Name" col="name" options={[...new Set(dashRecs.map(r => r.name))].sort()} filterState={dashFilters} setFilterState={setDashFilters} activeFilterState={activeDashFilter} setActiveFilterState={setActiveDashFilter} />
+                  <FilterHeader label="Type" col="type" options={[...new Set(dashRecs.map(r => r.type))].sort()} filterState={dashFilters} setFilterState={setDashFilters} activeFilterState={activeDashFilter} setActiveFilterState={setActiveDashFilter} />
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Days</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Period</th>
+                  <FilterHeader label="Lead" col="lead" options={[...new Set(dashRecs.map(r => r.lead).filter(Boolean))].sort()} filterState={dashFilters} setFilterState={setDashFilters} activeFilterState={activeDashFilter} setActiveFilterState={setActiveDashFilter} />
+                  <FilterHeader label="Status" col="status" options={["Approved", "Pending", "Rejected"]} filterState={dashFilters} setFilterState={setDashFilters} activeFilterState={activeDashFilter} setActiveFilterState={setActiveDashFilter} />
                 </tr></thead>
-                <tbody>{sortRecords(dashRecs, dashSort.col, dashSort.dir).slice(0, 15).map((r, i) => (
+                <tbody>{applyFilters(dashRecs, dashFilters).slice(-15).reverse().map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}>{r.type}</td>
@@ -1181,20 +1209,29 @@ export default function DakotaLMS() {
 
         {tab === "manage" && isApprover && (
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Manage Requests</h2>
-            <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Click column headers to sort. Changes sync to Google Sheet.</p>
-            <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+              <div>
+                <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Manage Requests</h2>
+                <p style={{ fontSize: 13, color: "var(--muted)" }}>Filter by column headers. Changes sync to Google Sheet.</p>
+              </div>
+              {activeFilterCount(filters) > 0 && (
+                <button onClick={() => setFilters({ name: "", type: "", lead: "", status: "" })} style={{ fontSize: 12, padding: "6px 14px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-bg)", color: "var(--accent)", cursor: "pointer", fontFamily: "inherit", fontWeight: 600 }}>
+                  Clear {activeFilterCount(filters)} filter{activeFilterCount(filters) > 1 ? "s" : ""}
+                </button>
+              )}
+            </div>
+            <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "visible" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--hover)" }}>
-                  <SortHeader label="Employee" col="name" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
-                  <SortHeader label="Type" col="type" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
-                  <SortHeader label="Period" col="date" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
-                  <SortHeader label="Days" col="days" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
-                  <SortHeader label="Lead" col="lead" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
-                  <SortHeader label="Status" col="status" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
+                  <FilterHeader label="Employee" col="name" options={[...new Set(records.filter(r => canManage(r)).map(r => r.name))].sort()} filterState={filters} setFilterState={setFilters} activeFilterState={activeFilter} setActiveFilterState={setActiveFilter} />
+                  <FilterHeader label="Type" col="type" options={[...new Set(records.filter(r => canManage(r)).map(r => r.type))].sort()} filterState={filters} setFilterState={setFilters} activeFilterState={activeFilter} setActiveFilterState={setActiveFilter} />
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Period</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Days</th>
+                  <FilterHeader label="Lead" col="lead" options={[...new Set(records.filter(r => canManage(r)).map(r => r.lead).filter(Boolean))].sort()} filterState={filters} setFilterState={setFilters} activeFilterState={activeFilter} setActiveFilterState={setActiveFilter} />
+                  <FilterHeader label="Status" col="status" options={["Approved", "Pending", "Rejected"]} filterState={filters} setFilterState={setFilters} activeFilterState={activeFilter} setActiveFilterState={setActiveFilter} />
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Actions</th>
                 </tr></thead>
-                <tbody>{sortRecords(records.filter(r => canManage(r)), sortCol, sortDir).slice(0, 50).map((r, i) => (
+                <tbody>{applyFilters(records.filter(r => canManage(r)), filters).slice().reverse().slice(0, 50).map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}>{r.type}</td>
