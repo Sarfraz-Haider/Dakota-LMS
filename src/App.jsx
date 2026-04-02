@@ -289,6 +289,221 @@ function RequestForm({ user, records, onSubmit, loading }) {
   );
 }
 
+// ═══ ANALYTICS (Managers/Leads) ═══
+function Analytics({ records, user }) {
+  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
+  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+
+  // Parse record dates to ISO for comparison
+  const parseToISO = (ds) => toISO(ds);
+
+  // Check if a date falls within a leave period
+  const isOnLeave = (record, dateISO) => {
+    if (record.status === "Rejected") return false;
+    const s = parseToISO(record.startDate);
+    const e = parseToISO(record.endDate);
+    if (!s || !e) return false;
+    return dateISO >= s && dateISO <= e;
+  };
+
+  // Employees off on selected date
+  const offOnDate = records.filter(r => isOnLeave(r, selectedDate));
+
+  // Monthly stats
+  const monthRecords = records.filter(r => {
+    if (r.status === "Rejected") return false;
+    const s = parseToISO(r.startDate);
+    return s && s.startsWith(selectedMonth);
+  });
+
+  // Count unique employees off per day in the month
+  const daysInMonth = new Date(parseInt(selectedMonth.split("-")[0]), parseInt(selectedMonth.split("-")[1]), 0).getDate();
+  const dailyCounts = [];
+  for (let d = 1; d <= daysInMonth; d++) {
+    const iso = selectedMonth + "-" + String(d).padStart(2, "0");
+    const dt = new Date(iso + "T00:00:00");
+    const dayOfWeek = dt.getDay();
+    if (dayOfWeek === 0 || dayOfWeek === 6) continue;
+    const offCount = records.filter(r => isOnLeave(r, iso)).length;
+    dailyCounts.push({ date: iso, day: d, dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dayOfWeek], count: offCount });
+  }
+  const peakDay = dailyCounts.reduce((max, d) => d.count > max.count ? d : max, { count: 0 });
+  const totalMonthAbsences = monthRecords.reduce((sum, r) => sum + (Number(r.days) || 0), 0);
+  const uniqueEmployeesOff = [...new Set(monthRecords.map(r => r.name))].length;
+
+  // Extended leaves (3+ days)
+  const extendedLeaves = records.filter(r => r.status !== "Rejected" && Number(r.days) >= 3).sort((a, b) => Number(b.days) - Number(a.days));
+
+  // By leave type for the month
+  const typeBreakdown = {};
+  monthRecords.forEach(r => {
+    typeBreakdown[r.type] = (typeBreakdown[r.type] || 0) + (Number(r.days) || 0);
+  });
+
+  const cardStyle = { background: "var(--card)", borderRadius: 12, padding: "16px 20px", border: "1px solid var(--border)" };
+
+  return (
+    <div>
+      <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Leave Analytics</h2>
+      <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>Absence tracking, patterns, and extended leave monitoring.</p>
+
+      {/* ── Daily Check: Who's Off Today? ── */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>🗓️ Daily Absence Check</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>See who's off on any date</div>
+          </div>
+          <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }} />
+        </div>
+        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)", marginBottom: 10 }}>
+          {offOnDate.length} employee{offOnDate.length !== 1 ? "s" : ""} off on {dispDate(selectedDate)}
+        </div>
+        {offOnDate.length === 0 ? (
+          <div style={{ padding: "12px", borderRadius: 8, background: "var(--hover)", color: "var(--muted)", fontSize: 13, textAlign: "center" }}>No one is on leave this day ✅</div>
+        ) : (
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+            <thead>
+              <tr style={{ background: "var(--hover)" }}>
+                {["Employee", "Type", "Days", "Full Period", "Lead", "Status"].map(h => (
+                  <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {offOnDate.map((r, i) => (
+                <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "8px 12px", fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ padding: "8px 12px" }}>{r.type}</td>
+                  <td style={{ padding: "8px 12px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
+                  <td style={{ padding: "8px 12px", fontSize: 12 }}>{r.lead}</td>
+                  <td style={{ padding: "8px 12px" }}><Badge status={r.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </div>
+
+      {/* ── Monthly Overview ── */}
+      <div style={{ ...cardStyle, marginBottom: 16 }}>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+          <div>
+            <div style={{ fontSize: 15, fontWeight: 700 }}>📊 Monthly Overview</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Absence patterns for the month</div>
+          </div>
+          <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+            style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }} />
+        </div>
+
+        {/* Summary cards */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
+          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>TOTAL DAYS OFF</div>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{totalMonthAbsences}</div>
+          </div>
+          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>EMPLOYEES OFF</div>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{uniqueEmployeesOff}</div>
+          </div>
+          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>PEAK DAY</div>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{peakDay.count > 0 ? peakDay.count : "—"}</div>
+            {peakDay.count > 0 && <div style={{ fontSize: 11, color: "var(--muted)" }}>{peakDay.dayName}, {dispDate(peakDay.date)}</div>}
+          </div>
+          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
+            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>LEAVE REQUESTS</div>
+            <div style={{ fontSize: 24, fontWeight: 800 }}>{monthRecords.length}</div>
+          </div>
+        </div>
+
+        {/* Type breakdown */}
+        {Object.keys(typeBreakdown).length > 0 && (
+          <div style={{ marginBottom: 16 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>By Leave Type</div>
+            <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+              {Object.entries(typeBreakdown).sort((a, b) => b[1] - a[1]).map(([type, days]) => (
+                <div key={type} style={{ padding: "6px 14px", borderRadius: 8, background: "var(--accent-bg)", fontSize: 12 }}>
+                  <span style={{ fontWeight: 600, color: "var(--accent)" }}>{type}:</span>
+                  <span style={{ marginLeft: 4, color: "var(--text)" }}>{days} days</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {/* Daily heatmap bar */}
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Daily Absence Count</div>
+        <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginBottom: 4 }}>
+          {dailyCounts.map((d, i) => {
+            const intensity = d.count === 0 ? 0 : Math.min(d.count / 6, 1);
+            const bg = d.count === 0
+              ? "var(--hover)"
+              : d.count >= 5 ? "#ef4444" : d.count >= 3 ? "#f59e0b" : "var(--accent)";
+            return (
+              <div key={i} title={d.dayName + " " + d.day + ": " + d.count + " off"} style={{
+                width: 28, height: 28, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 9, fontWeight: 600, cursor: "default",
+                background: bg, color: d.count > 0 ? "#fff" : "var(--muted)",
+                opacity: d.count === 0 ? 0.5 : 1,
+                border: selectedDate === d.date ? "2px solid var(--text)" : "1px solid transparent",
+              }}
+                onClick={() => setSelectedDate(d.date)}
+              >
+                {d.day}
+              </div>
+            );
+          })}
+        </div>
+        <div style={{ display: "flex", gap: 12, fontSize: 10, color: "var(--muted)", marginTop: 4 }}>
+          <span>🟩 1-2 off</span> <span>🟨 3-4 off</span> <span>🟥 5+ off</span> <span>Click a day to see details above</span>
+        </div>
+      </div>
+
+      {/* ── Extended Leaves (3+ days) ── */}
+      <div style={{ ...cardStyle }}>
+        <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>⚠️ Extended Leaves (3+ Days)</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>All leave requests of 3 or more working days, sorted by duration.</div>
+        {extendedLeaves.length === 0 ? (
+          <div style={{ padding: "12px", borderRadius: 8, background: "var(--hover)", color: "var(--muted)", fontSize: 13, textAlign: "center" }}>No extended leaves found</div>
+        ) : (
+          <div style={{ overflow: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+              <thead>
+                <tr style={{ background: "var(--hover)" }}>
+                  {["Employee", "Type", "Days", "Period", "Lead", "Status"].map(h => (
+                    <th key={h} style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {extendedLeaves.map((r, i) => (
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)", background: Number(r.days) >= 10 ? "rgba(239,68,68,0.05)" : Number(r.days) >= 5 ? "rgba(245,158,11,0.05)" : "transparent" }}>
+                    <td style={{ padding: "8px 12px", fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ padding: "8px 12px" }}>{r.type}</td>
+                    <td style={{ padding: "8px 12px" }}>
+                      <span style={{
+                        fontWeight: 700, padding: "2px 8px", borderRadius: 6, fontSize: 12,
+                        background: Number(r.days) >= 10 ? "rgba(239,68,68,0.15)" : Number(r.days) >= 5 ? "rgba(245,158,11,0.15)" : "var(--accent-bg)",
+                        color: Number(r.days) >= 10 ? "#ef4444" : Number(r.days) >= 5 ? "#d97706" : "var(--accent)",
+                      }}>{r.days}d</span>
+                    </td>
+                    <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
+                    <td style={{ padding: "8px 12px", fontSize: 12 }}>{r.lead}</td>
+                    <td style={{ padding: "8px 12px" }}><Badge status={r.status} /></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ═══ FAQ CHATBOT (offline) ═══
 function FAQChat() {
   const [q, setQ] = useState("");
@@ -637,6 +852,7 @@ export default function DakotaLMS() {
   if (isApprover) {
     allTabs.push({ id: "approvals", icon: "✅", label: "Approvals" + (pending.length ? " (" + pending.length + ")" : "") });
     allTabs.push({ id: "team", icon: "👥", label: "Team" });
+    allTabs.push({ id: "analytics", icon: "📈", label: "Analytics" });
     allTabs.push({ id: "manage", icon: "⚙️", label: "Manage" });
   }
   allTabs.push({ id: "faq", icon: "📋", label: "Policy FAQ" });
@@ -816,8 +1032,9 @@ export default function DakotaLMS() {
           </div>
         )}
 
-        {tab === "manage" && isApprover && (
-          <div>
+        {tab === "analytics" && isApprover && <Analytics records={records} user={user} />}
+
+        {tab === "manage" && isApprover && (          <div>
             <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Manage Requests</h2>
             <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Changes sync directly to Google Sheet.</p>
             <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
