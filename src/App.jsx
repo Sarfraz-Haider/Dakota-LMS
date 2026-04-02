@@ -171,38 +171,6 @@ function Badge({ status }) {
   return <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: s.bg, color: s.c }}>{status || "Pending"}</span>;
 }
 
-// ═══ FAQ Policy Bot (offline, no API) ═══
-const FAQ = [
-  { keys: ["hospital", "inpatient", "hospitalization", "admitted", "admission"], title: "Hospital Care", ans: "Hospital Care limit: PKR 550,000 per insured family member. Room & Board: PKR 25,000/day. Accidental injuries get an additional PKR 550,000. Pre/post hospitalization covered for 30 days. Mental wellbeing covered up to Rs. 50,000. Free GP tele-consultation included." },
-  { keys: ["opd", "outpatient", "out-patient", "daily", "everyday"], title: "OPD Coverage", ans: "OPD limits by family status:\n• Single only: PKR 60,000\n• Single + Parents: PKR 80,000\n• Married (no kids/parents): PKR 80,000\n• Married + Kids: PKR 90,000\n• Married + Parents: PKR 100,000\n• Married + Parents + Kids: PKR 120,000" },
-  { keys: ["dental", "teeth", "tooth", "filling", "root canal", "scaling"], title: "Dental", ans: "Dental covered under OPD:\n• Capping, Bridging, Extraction, Filling, Scaling: up to 10% of OPD limit\n• Crowning & Root Canal: up to 50% of OPD limit" },
-  { keys: ["optical", "glasses", "spectacles", "eyes", "vision", "frames"], title: "Optical", ans: "Optical covered under OPD: One pair of Glasses/Frames/Spectacles per insured per year, OR up to 10% of OPD limit for the whole family." },
-  { keys: ["maternity", "pregnancy", "delivery", "caesarean", "baby", "birth"], title: "Maternity", ans: "Maternity Care:\n• Normal Delivery: PKR 180,000\n• Caesarean Section / Multiple Birth: PKR 330,000\n• Pre & Post Natal outpatient charges covered\n• Baby boy circumcision: up to Rs. 10,000\n• Coverage up to 45 years of age" },
-  { keys: ["major medical", "exhausted", "overflow"], title: "Major Medical", ans: "Major Medical Care: PKR 500,000 per member. Activates AFTER Hospital Care limit is exhausted. Covers Employee, Spouse, Children only — Parents NOT covered under Major Medical." },
-  { keys: ["emergency", "accident", "hotline", "phone", "contact", "number", "call"], title: "Emergency Contacts", ans: "Emergency Hotlines:\n• Karachi: 0300 8207000\n• Lahore: 0300 8483818\n• Islamabad: 0300 8508550\n• EFU 24/7 Call Centre: (021) 111-4357-00\n• Email: MyHealthapp@efulife.com\n• EFU MyHealth App: Google Play & iOS" },
-  { keys: ["claim", "reimbursement", "reimburse", "submit", "documents", "receipt"], title: "Claims Process", ans: "For Non-Network Hospital claims, submit via HR:\n• Duly filled Claim Form\n• Itemized Hospital Bill\n• Discharge Summary\n• Lab/Radiology reports + doctor's prescription\n• All Original Receipts\n• Doctor's Prescriptions\nProcessing: ~15 working days." },
-  { keys: ["network", "hospital", "card", "credit", "cashless", "pa", "pre-auth"], title: "Network Hospitals", ans: "Emergency: Go to Network Hospital, show Health Card — no payment needed.\nPlanned: Get Pre-Authorization (PA) form from hospital/HR, submit 3 days before admission.\nNon-Network: Pay yourself, then claim reimbursement.\nNote: AKUH, OMI, Hameed Latif, Evercare, Doctor's, Shifa, South City require room limit ≥ General Ward rate." },
-  { keys: ["covered", "who", "family", "spouse", "children", "parents", "dependent", "eligible"], title: "Who Is Covered", ans: "Covered under EFU Health Plan A:\n• Full-time employees & spouses (up to age 65)\n• Sons up to age 25\n• Unmarried daughters till marriage\n• Parents till 80 years\n\nIMPORTANT: Enroll dependents within 30 days of eligibility (marriage/birth)." },
-  { keys: ["pre-existing", "existing", "condition", "hepatitis", "congenital"], title: "Pre-Existing Conditions", ans: "ALL pre-existing conditions covered:\n• Hospital, Major Medical & OPD: up to 65 years\n• Parents: Hospital & OPD up to 80 years\n• Maternity: up to 45 years\n• Hepatitis B & C: covered under Hospital & Major Medical\n• Congenital disorders: covered for all members" },
-  { keys: ["excluded", "exclusion", "not covered", "excluded", "cosmetic", "weight"], title: "Exclusions", ans: "NOT covered: Cosmetic surgery, weight management, organ donor charges, experimental treatments, robotic surgery, self-inflicted injury, dangerous sports, war/terrorism, HIV/AIDS, air ambulance. IOL in cataract > Rs.40,000 excluded. Assistant surgeon charges excluded." },
-  { keys: ["annual", "leave", "balance", "how many", "entitlement"], title: "Leave Balances", ans: "Annual leave entitlements:\n• Annual Leave: 14 days/year\n• Casual Leave: 10 days/year\n• Sick Leave: 10 days/year\n• Bereavement (Immediate Family) and Maternity/Paternity also available." },
-  { keys: ["psychiatric", "mental", "therapy", "psychologist", "depression", "anxiety"], title: "Mental Health", ans: "Mental health coverage:\n• Hospital Care: up to Rs. 50,000 for mental wellbeing\n• OPD: Psychiatric/psychologist consultation, investigations, medicines, antidepressants covered\n• Rehabilitation covered under OPD" },
-  { keys: ["vaccine", "vaccination", "flu", "covid"], title: "Vaccinations", ans: "Non-EPI vaccinations (flu, Covid etc.) covered for employees & all dependents including parents under OPD." },
-];
-
-function searchFAQ(query) {
-  if (!query.trim()) return [];
-  const q = query.toLowerCase();
-  const scored = FAQ.map(f => {
-    let score = 0;
-    f.keys.forEach(k => { if (q.includes(k)) score += 3; });
-    const words = q.split(/\s+/);
-    words.forEach(w => { if (w.length > 2) f.keys.forEach(k => { if (k.includes(w)) score += 1; }); });
-    return { ...f, score };
-  }).filter(f => f.score > 0).sort((a, b) => b.score - a.score);
-  return scored.slice(0, 3);
-}
-
 // ═══ EDIT MODAL ═══
 function EditModal({ record, onSave, onClose }) {
   const [f, setF] = useState({ ...record, _s: toISO(record.startDate), _e: toISO(record.endDate) });
@@ -803,145 +771,7 @@ function Analytics({ records, user }) {
   );
 }
 
-// ═══ FAQ CHATBOT (offline) ═══
-function FAQChat() {
-  const [q, setQ] = useState("");
-  const [history, setHistory] = useState([]);
-  const ref = useRef(null);
-  useEffect(() => { ref.current?.scrollIntoView({ behavior: "smooth" }); }, [history]);
 
-  const ask = (query) => {
-    if (!query.trim()) return;
-    const results = searchFAQ(query);
-    const answer = results.length > 0
-      ? results.map(r => "📌 " + r.title + "\n" + r.ans).join("\n\n")
-      : "I couldn't find a specific policy for that. Try keywords like: hospital, opd, dental, maternity, claim, emergency, leave, excluded, or mental health.";
-    setHistory(p => [...p, { q: query, a: answer }]);
-    setQ("");
-  };
-
-  const chips = ["Hospital care limit?", "OPD coverage?", "How to claim?", "Emergency numbers?", "Dental coverage?", "Maternity benefits?", "Who is covered?", "Leave balance?"];
-
-  return (
-    <div>
-      <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Policy FAQ</h2>
-      <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Search EFU Health Plan A & leave policies instantly — no internet needed.</p>
-      <div style={{ background: "var(--card)", borderRadius: 14, border: "1px solid var(--border)", height: "calc(100vh - 180px)", display: "flex", flexDirection: "column" }}>
-        <div style={{ flex: 1, overflow: "auto", padding: "16px 20px" }}>
-          {history.length === 0 && (
-            <div style={{ textAlign: "center", padding: "30px 0", color: "var(--muted)" }}>
-              <div style={{ fontSize: 36, marginBottom: 8 }}>📋</div>
-              <div style={{ fontSize: 14, fontWeight: 600, marginBottom: 14 }}>Ask about any company policy</div>
-              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, justifyContent: "center" }}>
-                {chips.map((c, i) => (
-                  <button key={i} onClick={() => ask(c)} style={{ padding: "6px 14px", borderRadius: 20, border: "1px solid var(--border)", background: "transparent", color: "var(--muted)", fontSize: 12, fontFamily: "inherit", cursor: "pointer" }}>{c}</button>
-                ))}
-              </div>
-            </div>
-          )}
-          {history.map((h, i) => (
-            <div key={i} style={{ marginBottom: 16 }}>
-              <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: 8 }}>
-                <div style={{ padding: "8px 14px", borderRadius: "14px 14px 4px 14px", background: "var(--accent)", color: "#fff", fontSize: 13, maxWidth: "70%" }}>{h.q}</div>
-              </div>
-              <div style={{ padding: "12px 16px", borderRadius: "14px 14px 14px 4px", background: "var(--hover)", fontSize: 13, lineHeight: 1.7, whiteSpace: "pre-wrap", border: "1px solid var(--border)" }}>{h.a}</div>
-            </div>
-          ))}
-          <div ref={ref} />
-        </div>
-        <div style={{ padding: "12px 16px", borderTop: "1px solid var(--border)", display: "flex", gap: 8 }}>
-          <input value={q} onChange={e => setQ(e.target.value)} onKeyDown={e => e.key === "Enter" && ask(q)}
-            placeholder="Search policies (e.g. dental, maternity, claim)..."
-            style={{ flex: 1, padding: "10px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }} />
-          <button onClick={() => ask(q)} style={{ padding: "10px 20px", borderRadius: 10, border: "none", background: q.trim() ? "var(--accent)" : "var(--border)", color: q.trim() ? "#fff" : "var(--muted)", fontWeight: 600, fontSize: 13 }}>Search</button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ═══ SETUP SCREEN ═══
-function SetupScreen({ onSave }) {
-  const [url, setUrl] = useState("");
-  const [testing, setTesting] = useState(false);
-  const [err, setErr] = useState("");
-  const [ok, setOk] = useState(false);
-  const [detail, setDetail] = useState("");
-
-  const test = async () => {
-    if (!url.trim()) return;
-    let cleanUrl = url.trim();
-    if (!cleanUrl.endsWith("/exec")) {
-      if (!cleanUrl.endsWith("/")) cleanUrl += "/";
-      if (!cleanUrl.endsWith("exec")) cleanUrl += "exec";
-    }
-    setTesting(true); setErr(""); setOk(false); setDetail("Connecting to Google Apps Script...");
-    try {
-      const r = await fetch(cleanUrl, { redirect: "follow" });
-      setDetail("Got response, parsing...");
-      const text = await r.text();
-      let d;
-      try { d = JSON.parse(text); } catch {
-        setErr("Got a response but it wasn't valid JSON. Make sure you pasted the ENTIRE Apps Script code and redeployed.");
-        setDetail("Response: " + text.substring(0, 100));
-        return;
-      }
-      if (d.success && d.records) {
-        setOk(true);
-        setDetail("Found " + d.records.length + " records!");
-        setTimeout(() => onSave(cleanUrl), 1000);
-      } else if (d.error) {
-        setErr("Apps Script error: " + d.error);
-      } else {
-        setErr("Unexpected response. Check sheet tab is named 'Form_Responses'.");
-        setDetail(JSON.stringify(d).substring(0, 100));
-      }
-    } catch (e) {
-      setErr("Connection failed. This can happen inside Claude's sandbox. Try these fixes:");
-      setDetail(e.message || "Network error");
-    }
-    finally { setTesting(false); }
-  };
-
-  return (
-    <div style={{ width: "100%", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif", background: "linear-gradient(135deg,#0f172a,#1e293b)" }}>
-      <style>{`@import url('https://fonts.googleapis.com/css2?family=DM+Sans:opsz,wght@9..40,400;9..40,500;9..40,600;9..40,700;9..40,800&display=swap');`}</style>
-      <div style={{ background: "#1e293b", borderRadius: 20, padding: "36px", width: 480, border: "1px solid #334155" }}>
-        <div style={{ textAlign: "center", marginBottom: 20 }}>
-          <div style={{ fontSize: 36, marginBottom: 8 }}>⚙️</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: "#f1f5f9" }}>Dakota LMS Setup</div>
-          <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>Connect to your Google Sheet</div>
-        </div>
-        <div style={{ fontSize: 12, color: "#94a3b8", marginBottom: 6, fontWeight: 600 }}>PASTE YOUR APPS SCRIPT WEB APP URL</div>
-        <input value={url} onChange={e => { setUrl(e.target.value); setErr(""); setOk(false); setDetail(""); }}
-          placeholder="https://script.google.com/macros/s/.../exec"
-          style={{ width: "100%", padding: "12px", borderRadius: 10, border: err ? "1px solid #ef4444" : "1px solid #475569", background: "#0f172a", color: "#e2e8f0", fontSize: 13, fontFamily: "inherit", marginBottom: 12 }} />
-        {detail && <div style={{ fontSize: 11, color: "#64748b", marginBottom: 8 }}>{detail}</div>}
-        {err && (
-          <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 10, lineHeight: 1.5 }}>
-            ⚠️ {err}
-            {err.includes("sandbox") && (
-              <div style={{ marginTop: 8, color: "#94a3b8", fontSize: 11, lineHeight: 1.6 }}>
-                1. The URL will work when deployed on Vercel (free)<br />
-                2. Or use "Demo Mode" below to try the app with local data
-              </div>
-            )}
-          </div>
-        )}
-        {ok && <div style={{ fontSize: 12, color: "#22c55e", marginBottom: 10 }}>✅ Connected! Loading Dakota LMS...</div>}
-        <button onClick={test} disabled={!url.trim() || testing} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: url.trim() ? "#009b8d" : "#334155", color: "#fff", fontSize: 14, fontWeight: 700, marginBottom: 8 }}>
-          {testing ? "Testing..." : "Connect & Launch"}
-        </button>
-        <button onClick={() => onSave("DEMO")} style={{ width: "100%", padding: 10, borderRadius: 10, border: "1px solid #475569", background: "transparent", color: "#94a3b8", fontSize: 13 }}>
-          Skip → Use Demo Mode (local storage)
-        </button>
-        <div style={{ fontSize: 11, color: "#475569", marginTop: 12, lineHeight: 1.6, textAlign: "center" }}>
-          Demo mode uses browser storage. Google Sheet mode syncs across all users.
-        </div>
-      </div>
-    </div>
-  );
-}
 
 // ═══ LOGIN SCREEN ═══
 function LoginScreen({ onLogin }) {
@@ -1217,7 +1047,6 @@ export default function DakotaLMS() {
     allTabs.push({ id: "analytics", icon: "📈", label: "Analytics" });
     allTabs.push({ id: "manage", icon: "⚙️", label: "Manage" });
   }
-  allTabs.push({ id: "faq", icon: "📋", label: "Policy FAQ" });
 
   const dashRecs = records.filter(r => {
     if (role === "manager") return true;
@@ -1583,7 +1412,6 @@ export default function DakotaLMS() {
           </div>
         )}
 
-        {tab === "faq" && <FAQChat />}
       </div>
     </div>
   );
