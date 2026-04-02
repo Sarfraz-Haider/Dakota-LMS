@@ -293,11 +293,10 @@ function RequestForm({ user, records, onSubmit, loading }) {
 function Analytics({ records, user }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [drill, setDrill] = useState(null); // { type, title, records }
 
-  // Parse record dates to ISO for comparison
   const parseToISO = (ds) => toISO(ds);
 
-  // Check if a date falls within a leave period
   const isOnLeave = (record, dateISO) => {
     if (record.status === "Rejected") return false;
     const s = parseToISO(record.startDate);
@@ -306,17 +305,14 @@ function Analytics({ records, user }) {
     return dateISO >= s && dateISO <= e;
   };
 
-  // Employees off on selected date
   const offOnDate = records.filter(r => isOnLeave(r, selectedDate));
 
-  // Monthly stats
   const monthRecords = records.filter(r => {
     if (r.status === "Rejected") return false;
     const s = parseToISO(r.startDate);
     return s && s.startsWith(selectedMonth);
   });
 
-  // Count unique employees off per day in the month
   const daysInMonth = new Date(parseInt(selectedMonth.split("-")[0]), parseInt(selectedMonth.split("-")[1]), 0).getDate();
   const dailyCounts = [];
   for (let d = 1; d <= daysInMonth; d++) {
@@ -324,30 +320,93 @@ function Analytics({ records, user }) {
     const dt = new Date(iso + "T00:00:00");
     const dayOfWeek = dt.getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-    const offCount = records.filter(r => isOnLeave(r, iso)).length;
-    dailyCounts.push({ date: iso, day: d, dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dayOfWeek], count: offCount });
+    const offList = records.filter(r => isOnLeave(r, iso));
+    dailyCounts.push({ date: iso, day: d, dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dayOfWeek], count: offList.length, records: offList });
   }
-  const peakDay = dailyCounts.reduce((max, d) => d.count > max.count ? d : max, { count: 0 });
-  const totalMonthAbsences = monthRecords.reduce((sum, r) => sum + (Number(r.days) || 0), 0);
-  const uniqueEmployeesOff = [...new Set(monthRecords.map(r => r.name))].length;
+  const peakDay = dailyCounts.reduce((max, d) => d.count > max.count ? d : max, { count: 0, records: [] });
+  const totalMonthDays = monthRecords.reduce((sum, r) => sum + (Number(r.days) || 0), 0);
+  const uniqueNames = [...new Set(monthRecords.map(r => r.name))];
+  const uniqueEmployeesOff = uniqueNames.length;
 
-  // Extended leaves (3+ days)
-  const extendedLeaves = records.filter(r => r.status !== "Rejected" && Number(r.days) >= 3).sort((a, b) => Number(b.days) - Number(a.days));
-
-  // By leave type for the month
   const typeBreakdown = {};
   monthRecords.forEach(r => {
-    typeBreakdown[r.type] = (typeBreakdown[r.type] || 0) + (Number(r.days) || 0);
+    if (!typeBreakdown[r.type]) typeBreakdown[r.type] = { days: 0, records: [] };
+    typeBreakdown[r.type].days += (Number(r.days) || 0);
+    typeBreakdown[r.type].records.push(r);
   });
 
+  const extendedLeaves = records.filter(r => r.status !== "Rejected" && Number(r.days) >= 3).sort((a, b) => Number(b.days) - Number(a.days));
+
   const cardStyle = { background: "var(--card)", borderRadius: 12, padding: "16px 20px", border: "1px solid var(--border)" };
+
+  // Drill-down detail table
+  const DrillPanel = ({ title, data, onClose }) => (
+    <div style={{ ...cardStyle, marginTop: 12, border: "1px solid var(--accent)", background: "var(--hover)" }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+        <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>{title}</div>
+        <button onClick={onClose} style={{ background: "none", border: "none", fontSize: 16, color: "var(--muted)", cursor: "pointer" }}>✕</button>
+      </div>
+      {data.length === 0 ? (
+        <div style={{ padding: 10, color: "var(--muted)", fontSize: 13, textAlign: "center" }}>No records</div>
+      ) : (
+        <div style={{ overflow: "auto" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+            <thead>
+              <tr style={{ background: "var(--card)" }}>
+                {["Employee", "Type", "Days", "Period", "Lead", "Status"].map(h => (
+                  <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {data.map((r, i) => (
+                <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                  <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
+                  <td style={{ padding: "7px 10px" }}>{r.type}</td>
+                  <td style={{ padding: "7px 10px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
+                  <td style={{ padding: "7px 10px", fontSize: 11, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
+                  <td style={{ padding: "7px 10px", fontSize: 11 }}>{r.lead}</td>
+                  <td style={{ padding: "7px 10px" }}><Badge status={r.status} /></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div style={{ fontSize: 11, color: "var(--muted)", padding: "8px 10px 0" }}>{data.length} record{data.length !== 1 ? "s" : ""} · {data.reduce((s, r) => s + (Number(r.days) || 0), 0)} total days</div>
+        </div>
+      )}
+    </div>
+  );
+
+  const clickableCard = (icon, label, value, sub, drillType, drillTitle, drillData) => (
+    <div
+      onClick={() => setDrill(drill?.type === drillType ? null : { type: drillType, title: drillTitle, records: drillData })}
+      style={{
+        flex: "1 1 120px", padding: "12px 16px", borderRadius: 10,
+        background: drill?.type === drillType ? "var(--accent-bg)" : "var(--hover)",
+        border: drill?.type === drillType ? "1px solid var(--accent)" : "1px solid var(--border)",
+        cursor: "pointer", transition: "all 0.2s",
+      }}
+    >
+      <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 24, fontWeight: 800 }}>{value}</div>
+      {sub && <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 2 }}>{sub}</div>}
+      <div style={{ fontSize: 10, color: "var(--accent)", marginTop: 4 }}>{drill?.type === drillType ? "▲ Click to close" : "▼ Click for details"}</div>
+    </div>
+  );
+
+  // Build employee-level summary for "Employees Off" drill
+  const employeeSummary = uniqueNames.map(name => {
+    const empRecs = monthRecords.filter(r => r.name === name);
+    const totalDays = empRecs.reduce((s, r) => s + (Number(r.days) || 0), 0);
+    return { name, totalDays, count: empRecs.length, records: empRecs };
+  }).sort((a, b) => b.totalDays - a.totalDays);
 
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Leave Analytics</h2>
-      <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>Absence tracking, patterns, and extended leave monitoring.</p>
+      <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>Click any card or day for drill-down details.</p>
 
-      {/* ── Daily Check: Who's Off Today? ── */}
+      {/* ── Daily Check ── */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
           <div>
@@ -357,7 +416,7 @@ function Analytics({ records, user }) {
           <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
             style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }} />
         </div>
-        <div style={{ fontSize: 13, fontWeight: 600, color: "var(--accent)", marginBottom: 10 }}>
+        <div style={{ fontSize: 13, fontWeight: 600, color: offOnDate.length > 0 ? "#d97706" : "var(--accent)", marginBottom: 10 }}>
           {offOnDate.length} employee{offOnDate.length !== 1 ? "s" : ""} off on {dispDate(selectedDate)}
         </div>
         {offOnDate.length === 0 ? (
@@ -392,65 +451,100 @@ function Analytics({ records, user }) {
         <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
           <div>
             <div style={{ fontSize: 15, fontWeight: 700 }}>📊 Monthly Overview</div>
-            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Absence patterns for the month</div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Click any card or day for breakdown</div>
           </div>
-          <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)}
+          <input type="month" value={selectedMonth} onChange={e => { setSelectedMonth(e.target.value); setDrill(null); }}
             style={{ padding: "8px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" }} />
         </div>
 
-        {/* Summary cards */}
-        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 16 }}>
-          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
-            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>TOTAL DAYS OFF</div>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{totalMonthAbsences}</div>
-          </div>
-          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
-            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>EMPLOYEES OFF</div>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{uniqueEmployeesOff}</div>
-          </div>
-          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
-            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>PEAK DAY</div>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{peakDay.count > 0 ? peakDay.count : "—"}</div>
-            {peakDay.count > 0 && <div style={{ fontSize: 11, color: "var(--muted)" }}>{peakDay.dayName}, {dispDate(peakDay.date)}</div>}
-          </div>
-          <div style={{ flex: "1 1 120px", padding: "12px 16px", borderRadius: 10, background: "var(--hover)", border: "1px solid var(--border)" }}>
-            <div style={{ fontSize: 11, color: "var(--muted)", fontWeight: 600, marginBottom: 4 }}>LEAVE REQUESTS</div>
-            <div style={{ fontSize: 24, fontWeight: 800 }}>{monthRecords.length}</div>
-          </div>
+        {/* Clickable summary cards */}
+        <div style={{ display: "flex", gap: 10, flexWrap: "wrap", marginBottom: 12 }}>
+          {clickableCard("📅", "TOTAL DAYS OFF", totalMonthDays, null, "total", "All Leave Requests — " + dispDate(selectedMonth + "-01").slice(0, 2) + "/2026", monthRecords)}
+          {clickableCard("👥", "EMPLOYEES OFF", uniqueEmployeesOff, null, "employees", "Employees Off This Month", monthRecords)}
+          {clickableCard("🔺", "PEAK DAY", peakDay.count > 0 ? peakDay.count : "—", peakDay.count > 0 ? (peakDay.dayName + ", " + dispDate(peakDay.date)) : null, "peak", "Peak Day — " + (peakDay.count > 0 ? dispDate(peakDay.date) : "N/A"), peakDay.records || [])}
+          {clickableCard("📝", "LEAVE REQUESTS", monthRecords.length, null, "requests", "All Requests This Month", monthRecords)}
         </div>
 
-        {/* Type breakdown */}
+        {/* Drill-down panel for cards */}
+        {drill && drill.type === "employees" && (
+          <div style={{ ...cardStyle, marginBottom: 12, border: "1px solid var(--accent)", background: "var(--hover)" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>👥 Employee Breakdown — {uniqueEmployeesOff} employees</div>
+              <button onClick={() => setDrill(null)} style={{ background: "none", border: "none", fontSize: 16, color: "var(--muted)", cursor: "pointer" }}>✕</button>
+            </div>
+            <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+              <thead><tr style={{ background: "var(--card)" }}>
+                {["Employee", "Requests", "Total Days", ""].map(h => <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>{h}</th>)}
+              </tr></thead>
+              <tbody>
+                {employeeSummary.map((emp, i) => (
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)", cursor: "pointer" }}
+                    onClick={() => setDrill({ type: "emp-detail", title: emp.name + " — Leave Details", records: emp.records })}
+                    onMouseEnter={e => e.currentTarget.style.background = "var(--accent-bg)"}
+                    onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                  >
+                    <td style={{ padding: "7px 10px", fontWeight: 600 }}>{emp.name}</td>
+                    <td style={{ padding: "7px 10px" }}>{emp.count}</td>
+                    <td style={{ padding: "7px 10px", fontWeight: 700, color: emp.totalDays >= 5 ? "#ef4444" : emp.totalDays >= 3 ? "#d97706" : "var(--accent)" }}>{emp.totalDays}d</td>
+                    <td style={{ padding: "7px 10px", fontSize: 10, color: "var(--accent)" }}>View details →</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        {drill && (drill.type === "total" || drill.type === "peak" || drill.type === "requests" || drill.type === "emp-detail" || drill.type === "type-detail" || drill.type === "day-detail") && (
+          <DrillPanel title={drill.title} data={drill.records} onClose={() => setDrill(null)} />
+        )}
+
+        {/* Type breakdown - clickable */}
         {Object.keys(typeBreakdown).length > 0 && (
-          <div style={{ marginBottom: 16 }}>
-            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>By Leave Type</div>
+          <div style={{ marginTop: 14, marginBottom: 14 }}>
+            <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>By Leave Type <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 400 }}>— click for details</span></div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              {Object.entries(typeBreakdown).sort((a, b) => b[1] - a[1]).map(([type, days]) => (
-                <div key={type} style={{ padding: "6px 14px", borderRadius: 8, background: "var(--accent-bg)", fontSize: 12 }}>
-                  <span style={{ fontWeight: 600, color: "var(--accent)" }}>{type}:</span>
-                  <span style={{ marginLeft: 4, color: "var(--text)" }}>{days} days</span>
+              {Object.entries(typeBreakdown).sort((a, b) => b[1].days - a[1].days).map(([type, data]) => (
+                <div key={type}
+                  onClick={() => setDrill(drill?.type === "type-" + type ? null : { type: "type-detail", title: type + " Leaves — " + data.days + " days", records: data.records })}
+                  style={{
+                    padding: "6px 14px", borderRadius: 8, cursor: "pointer", transition: "all 0.2s",
+                    background: drill?.title?.startsWith(type) ? "var(--accent)" : "var(--accent-bg)",
+                    fontSize: 12, border: "1px solid transparent",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.borderColor = "var(--accent)"}
+                  onMouseLeave={e => e.currentTarget.style.borderColor = "transparent"}
+                >
+                  <span style={{ fontWeight: 600, color: drill?.title?.startsWith(type) ? "#fff" : "var(--accent)" }}>{type}:</span>
+                  <span style={{ marginLeft: 4, color: drill?.title?.startsWith(type) ? "#fff" : "var(--text)" }}>{data.days} days ({data.records.length})</span>
                 </div>
               ))}
             </div>
           </div>
         )}
 
-        {/* Daily heatmap bar */}
-        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Daily Absence Count</div>
+        {/* Daily heatmap - clickable */}
+        <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 8 }}>Daily Absence Count <span style={{ fontSize: 11, color: "var(--muted)", fontWeight: 400 }}>— click any day</span></div>
         <div style={{ display: "flex", gap: 2, flexWrap: "wrap", marginBottom: 4 }}>
           {dailyCounts.map((d, i) => {
-            const intensity = d.count === 0 ? 0 : Math.min(d.count / 6, 1);
-            const bg = d.count === 0
-              ? "var(--hover)"
-              : d.count >= 5 ? "#ef4444" : d.count >= 3 ? "#f59e0b" : "var(--accent)";
+            const isActive = drill?.type === "day-detail" && drill?.title?.includes(dispDate(d.date));
+            const bg = d.count === 0 ? "var(--hover)" : d.count >= 5 ? "#ef4444" : d.count >= 3 ? "#f59e0b" : "var(--accent)";
             return (
-              <div key={i} title={d.dayName + " " + d.day + ": " + d.count + " off"} style={{
-                width: 28, height: 28, borderRadius: 4, display: "flex", alignItems: "center", justifyContent: "center",
-                fontSize: 9, fontWeight: 600, cursor: "default",
-                background: bg, color: d.count > 0 ? "#fff" : "var(--muted)",
-                opacity: d.count === 0 ? 0.5 : 1,
-                border: selectedDate === d.date ? "2px solid var(--text)" : "1px solid transparent",
-              }}
-                onClick={() => setSelectedDate(d.date)}
+              <div key={i}
+                title={d.dayName + " " + d.day + ": " + d.count + " off"}
+                onClick={() => {
+                  if (d.count > 0) {
+                    setDrill({ type: "day-detail", title: d.dayName + " " + dispDate(d.date) + " — " + d.count + " employee(s) off", records: d.records });
+                  }
+                  setSelectedDate(d.date);
+                }}
+                style={{
+                  width: 30, height: 30, borderRadius: 5, display: "flex", alignItems: "center", justifyContent: "center",
+                  fontSize: 10, fontWeight: 600, cursor: d.count > 0 ? "pointer" : "default",
+                  background: bg, color: d.count > 0 ? "#fff" : "var(--muted)",
+                  opacity: d.count === 0 ? 0.4 : 1,
+                  border: isActive ? "2px solid var(--text)" : selectedDate === d.date ? "2px solid var(--accent)" : "1px solid transparent",
+                  transition: "all 0.15s",
+                }}
               >
                 {d.day}
               </div>
@@ -458,14 +552,14 @@ function Analytics({ records, user }) {
           })}
         </div>
         <div style={{ display: "flex", gap: 12, fontSize: 10, color: "var(--muted)", marginTop: 4 }}>
-          <span>🟩 1-2 off</span> <span>🟨 3-4 off</span> <span>🟥 5+ off</span> <span>Click a day to see details above</span>
+          <span>🟩 1-2 off</span> <span>🟨 3-4 off</span> <span>🟥 5+ off</span>
         </div>
       </div>
 
-      {/* ── Extended Leaves (3+ days) ── */}
+      {/* ── Extended Leaves ── */}
       <div style={{ ...cardStyle }}>
         <div style={{ fontSize: 15, fontWeight: 700, marginBottom: 4 }}>⚠️ Extended Leaves (3+ Days)</div>
-        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>All leave requests of 3 or more working days, sorted by duration.</div>
+        <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 14 }}>Sorted by duration. Click a row to see full period.</div>
         {extendedLeaves.length === 0 ? (
           <div style={{ padding: "12px", borderRadius: 8, background: "var(--hover)", color: "var(--muted)", fontSize: 13, textAlign: "center" }}>No extended leaves found</div>
         ) : (
@@ -480,7 +574,13 @@ function Analytics({ records, user }) {
               </thead>
               <tbody>
                 {extendedLeaves.map((r, i) => (
-                  <tr key={i} style={{ borderTop: "1px solid var(--border)", background: Number(r.days) >= 10 ? "rgba(239,68,68,0.05)" : Number(r.days) >= 5 ? "rgba(245,158,11,0.05)" : "transparent" }}>
+                  <tr key={i} style={{
+                    borderTop: "1px solid var(--border)",
+                    background: Number(r.days) >= 10 ? "rgba(239,68,68,0.05)" : Number(r.days) >= 5 ? "rgba(245,158,11,0.05)" : "transparent",
+                    cursor: "pointer",
+                  }}
+                    onClick={() => setSelectedDate(toISO(r.startDate) || selectedDate)}
+                  >
                     <td style={{ padding: "8px 12px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 12px" }}>{r.type}</td>
                     <td style={{ padding: "8px 12px" }}>
