@@ -1089,6 +1089,8 @@ export default function DakotaLMS() {
   const [teamFilter, setTeamFilter] = useState("");
   const [teamLeadFilter, setTeamLeadFilter] = useState("");
   const [teamLowBal, setTeamLowBal] = useState(false);
+  const [teamHdrFilter, setTeamHdrFilter] = useState({ name: "", lead: "" });
+  const [teamTableFilter, setTeamTableFilter] = useState(null);
   const [activeFilter, setActiveFilter] = useState(null);
   const [activeDashFilter, setActiveDashFilter] = useState(null);
 
@@ -1405,6 +1407,8 @@ export default function DakotaLMS() {
           const teamData = displayNames.map(name => ({ name, lead: TEAM_MAP[name] || "", ...getUsed(records, name) }));
           const filtered = teamData.filter(d => {
             if (teamFilter && d.name !== teamFilter) return false;
+            if (teamHdrFilter.name && d.name !== teamHdrFilter.name) return false;
+            if (teamHdrFilter.lead && d.lead !== teamHdrFilter.lead) return false;
             if (teamLowBal && (BAL.Annual - d.Annual > 3) && (BAL.Casual - d.Casual > 3) && (BAL.Sick - d.Sick > 3)) return false;
             return true;
           });
@@ -1437,8 +1441,8 @@ export default function DakotaLMS() {
                   }}>
                   {teamLowBal ? "⚠️ Low Bal ON" : "⚠️ Low Bal"}
                 </button>
-                {(teamFilter || teamLowBal || teamLeadFilter) && (
-                  <button onClick={() => { setTeamFilter(""); setTeamLowBal(false); setTeamLeadFilter(""); }}
+                {(teamFilter || teamLowBal || teamLeadFilter || teamHdrFilter.name || teamHdrFilter.lead) && (
+                  <button onClick={() => { setTeamFilter(""); setTeamLowBal(false); setTeamLeadFilter(""); setTeamHdrFilter({ name: "", lead: "" }); }}
                     style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-bg)", color: "var(--accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
                     Clear All
                   </button>
@@ -1471,11 +1475,11 @@ export default function DakotaLMS() {
               {teamLeadFilter && (" under " + teamLeadFilter)}
               {teamLowBal && " · Low balance filter active"}
             </div>
-            <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
+            <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "visible" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--hover)" }}>
-                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Employee</th>
-                  {!teamLeadFilter && <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Lead</th>}
+                  <FilterHeader label="Employee" col="name" options={teamData.map(d => d.name).sort()} filterState={teamHdrFilter} setFilterState={setTeamHdrFilter} activeFilterState={teamTableFilter} setActiveFilterState={setTeamTableFilter} />
+                  {!teamLeadFilter && <FilterHeader label="Lead" col="lead" options={[...new Set(teamData.map(d => d.lead).filter(Boolean))].sort()} filterState={teamHdrFilter} setFilterState={setTeamHdrFilter} activeFilterState={teamTableFilter} setActiveFilterState={setTeamTableFilter} />}
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Annual</th>
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Left</th>
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Casual</th>
@@ -1491,7 +1495,6 @@ export default function DakotaLMS() {
                   const totalTaken = d.Annual + d.Casual + d.Sick;
                   const totalBal = (BAL.Annual + BAL.Casual + BAL.Sick);
                   const totalLeft = totalBal - totalTaken;
-                  const allTaken = totalTaken + d.Maternity + d.Bereavement;
                   return (
                   <tr key={d.name} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 12px", fontWeight: 600, fontSize: 12 }}>{d.name}</td>
@@ -1504,7 +1507,7 @@ export default function DakotaLMS() {
                     <td style={{ padding: "8px 12px", fontWeight: 600, color: BAL.Sick - d.Sick <= 2 ? "#ef4444" : BAL.Sick - d.Sick <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Sick - d.Sick}</td>
                     <td style={{ padding: "8px 12px", fontWeight: 600, borderLeft: "2px solid var(--border)", color: d.Maternity > 0 ? "#8b5cf6" : "var(--muted)" }}>{d.Maternity || "—"}</td>
                     <td style={{ padding: "8px 12px", fontWeight: 600, color: d.Bereavement > 0 ? "#ec4899" : "var(--muted)" }}>{d.Bereavement || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontWeight: 700, borderLeft: "2px solid var(--border)" }}>{allTaken}</td>
+                    <td style={{ padding: "8px 12px", fontWeight: 700, borderLeft: "2px solid var(--border)" }}>{totalTaken}</td>
                     <td style={{ padding: "8px 12px", fontWeight: 700, color: totalLeft < 5 ? "#ef4444" : totalLeft < 10 ? "#d97706" : "var(--accent)" }}>{totalLeft}</td>
                   </tr>
                   );
@@ -1522,7 +1525,7 @@ export default function DakotaLMS() {
                       <td style={{ padding: "8px 12px" }}></td>
                       <td style={{ padding: "8px 12px", fontWeight: 700, borderLeft: "2px solid var(--border)", color: "#8b5cf6" }}>{teamTotal.m || "—"}</td>
                       <td style={{ padding: "8px 12px", fontWeight: 700, color: "#ec4899" }}>{teamTotal.b || "—"}</td>
-                      <td style={{ padding: "8px 12px", fontWeight: 800, borderLeft: "2px solid var(--border)" }}>{teamTotal.a + teamTotal.c + teamTotal.si + teamTotal.m + teamTotal.b}</td>
+                      <td style={{ padding: "8px 12px", fontWeight: 800, borderLeft: "2px solid var(--border)" }}>{teamTotal.a + teamTotal.c + teamTotal.si}</td>
                       <td style={{ padding: "8px 12px" }}></td>
                     </tr>
                   </tfoot>
