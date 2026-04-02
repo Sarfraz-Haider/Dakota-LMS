@@ -941,6 +941,7 @@ export default function DakotaLMS() {
   const [filters, setFilters] = useState({ name: "", type: "", lead: "", status: "" });
   const [dashFilters, setDashFilters] = useState({ name: "", type: "", lead: "", status: "" });
   const [teamFilter, setTeamFilter] = useState("");
+  const [teamLeadFilter, setTeamLeadFilter] = useState("");
   const [teamLowBal, setTeamLowBal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(null);
   const [activeDashFilter, setActiveDashFilter] = useState(null);
@@ -1236,22 +1237,50 @@ export default function DakotaLMS() {
         )}
 
         {tab === "team" && isApprover && (() => {
-          const teamNames = [...new Set(teamRecs.map(r => r.name))].sort();
-          const teamData = teamNames.map(name => ({ name, ...getUsed(records, name) }));
+          // Build lead→members mapping from TEAM_MAP
+          const leadTeams = {};
+          LEADS.forEach(l => { leadTeams[l] = []; });
+          Object.entries(TEAM_MAP).forEach(([emp, lead]) => {
+            if (!LEADS.includes(emp) && !MANAGERS.includes(emp)) {
+              if (!leadTeams[lead]) leadTeams[lead] = [];
+              leadTeams[lead].push(emp);
+            }
+          });
+          Object.keys(leadTeams).forEach(l => leadTeams[l].sort());
+
+          const allNames = [...new Set(teamRecs.map(r => r.name))].sort();
+          
+          // Get names based on lead filter
+          let displayNames = allNames;
+          if (teamLeadFilter) {
+            displayNames = leadTeams[teamLeadFilter] || [];
+          }
+          
+          const teamData = displayNames.map(name => ({ name, lead: TEAM_MAP[name] || "", ...getUsed(records, name) }));
           const filtered = teamData.filter(d => {
             if (teamFilter && d.name !== teamFilter) return false;
             if (teamLowBal && (BAL.Annual - d.Annual > 3) && (BAL.Casual - d.Casual > 3) && (BAL.Sick - d.Sick > 3)) return false;
             return true;
           });
+
+          const teamTotal = filtered.reduce((s, d) => ({ a: s.a + d.Annual, c: s.c + d.Casual, si: s.si + d.Sick }), { a: 0, c: 0, si: 0 });
+
           return (
           <div>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16, flexWrap: "wrap", gap: 10 }}>
               <h2 style={{ fontSize: 20, fontWeight: 800 }}>Team Balances</h2>
               <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <select value={teamLeadFilter} onChange={e => { setTeamLeadFilter(e.target.value); setTeamFilter(""); }}
+                  style={{ padding: "6px 12px", borderRadius: 8, border: teamLeadFilter ? "1px solid var(--accent)" : "1px solid var(--border)", background: teamLeadFilter ? "var(--accent-bg)" : "var(--card)", color: "var(--text)", fontSize: 12, fontFamily: "inherit", fontWeight: teamLeadFilter ? 600 : 400 }}>
+                  <option value="">All Teams</option>
+                  {LEADS.map(l => (
+                    <option key={l} value={l}>{l}'s Team ({(leadTeams[l] || []).length})</option>
+                  ))}
+                </select>
                 <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
                   style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", fontSize: 12, fontFamily: "inherit" }}>
-                  <option value="">All Employees ({teamNames.length})</option>
-                  {teamNames.map(n => <option key={n} value={n}>{n}</option>)}
+                  <option value="">All Employees ({displayNames.length})</option>
+                  {displayNames.map(n => <option key={n} value={n}>{n}</option>)}
                 </select>
                 <button onClick={() => setTeamLowBal(!teamLowBal)}
                   style={{
@@ -1260,24 +1289,47 @@ export default function DakotaLMS() {
                     background: teamLowBal ? "rgba(239,68,68,0.1)" : "transparent",
                     color: teamLowBal ? "#ef4444" : "var(--muted)",
                   }}>
-                  {teamLowBal ? "⚠️ Low Balance ON" : "⚠️ Low Balance"}
+                  {teamLowBal ? "⚠️ Low Bal ON" : "⚠️ Low Bal"}
                 </button>
-                {(teamFilter || teamLowBal) && (
-                  <button onClick={() => { setTeamFilter(""); setTeamLowBal(false); }}
+                {(teamFilter || teamLowBal || teamLeadFilter) && (
+                  <button onClick={() => { setTeamFilter(""); setTeamLowBal(false); setTeamLeadFilter(""); }}
                     style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-bg)", color: "var(--accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
-                    Clear Filters
+                    Clear All
                   </button>
                 )}
               </div>
             </div>
+
+            {/* Team quick-switch buttons */}
+            {showAllTeam && (
+              <div style={{ display: "flex", gap: 6, marginBottom: 12, flexWrap: "wrap" }}>
+                <button onClick={() => { setTeamLeadFilter(""); setTeamFilter(""); }}
+                  style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    border: !teamLeadFilter ? "1px solid var(--accent)" : "1px solid var(--border)",
+                    background: !teamLeadFilter ? "var(--accent)" : "transparent",
+                    color: !teamLeadFilter ? "#fff" : "var(--muted)",
+                  }}>All ({allNames.length})</button>
+                {LEADS.filter(l => (leadTeams[l] || []).length > 0).map(l => (
+                  <button key={l} onClick={() => { setTeamLeadFilter(l); setTeamFilter(""); }}
+                    style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                      border: teamLeadFilter === l ? "1px solid var(--accent)" : "1px solid var(--border)",
+                      background: teamLeadFilter === l ? "var(--accent)" : "transparent",
+                      color: teamLeadFilter === l ? "#fff" : "var(--muted)",
+                    }}>{l.split(" ")[0]} ({(leadTeams[l] || []).length})</button>
+                ))}
+              </div>
+            )}
+
             <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
-              Showing {filtered.length} of {teamNames.length} employees
-              {teamLowBal && " · Filtered to employees with ≤3 days left in any category"}
+              Showing {filtered.length} employee{filtered.length !== 1 ? "s" : ""}
+              {teamLeadFilter && (" under " + teamLeadFilter)}
+              {teamLowBal && " · Low balance filter active"}
             </div>
             <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
                 <thead><tr style={{ background: "var(--hover)" }}>
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Employee</th>
+                  {!teamLeadFilter && <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Lead</th>}
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Annual</th>
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Casual</th>
@@ -1294,6 +1346,7 @@ export default function DakotaLMS() {
                   return (
                   <tr key={d.name} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{d.name}</td>
+                    {!teamLeadFilter && <td style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>{d.lead}</td>}
                     <td style={{ padding: "8px 14px" }}>{d.Annual}</td>
                     <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Annual - d.Annual <= 2 ? "#ef4444" : BAL.Annual - d.Annual <= 5 ? "#d97706" : "var(--accent)" }}>{BAL.Annual - d.Annual}</td>
                     <td style={{ padding: "8px 14px" }}>{d.Casual}</td>
@@ -1305,6 +1358,22 @@ export default function DakotaLMS() {
                   </tr>
                   );
                 })}</tbody>
+                {filtered.length > 1 && (
+                  <tfoot>
+                    <tr style={{ borderTop: "2px solid var(--border)", background: "var(--hover)" }}>
+                      <td style={{ padding: "8px 14px", fontWeight: 800, fontSize: 12 }}>TOTAL ({filtered.length})</td>
+                      {!teamLeadFilter && <td style={{ padding: "8px 14px" }}></td>}
+                      <td style={{ padding: "8px 14px", fontWeight: 700 }}>{teamTotal.a}</td>
+                      <td style={{ padding: "8px 14px" }}></td>
+                      <td style={{ padding: "8px 14px", fontWeight: 700 }}>{teamTotal.c}</td>
+                      <td style={{ padding: "8px 14px" }}></td>
+                      <td style={{ padding: "8px 14px", fontWeight: 700 }}>{teamTotal.si}</td>
+                      <td style={{ padding: "8px 14px" }}></td>
+                      <td style={{ padding: "8px 14px", fontWeight: 800, borderLeft: "2px solid var(--border)" }}>{teamTotal.a + teamTotal.c + teamTotal.si}</td>
+                      <td style={{ padding: "8px 14px" }}></td>
+                    </tr>
+                  </tfoot>
+                )}
               </table>
             </div>
           </div>
