@@ -247,27 +247,77 @@ function RequestForm({ user, records, onSubmit, loading }) {
   const defaultLead = TEAM_MAP[user] || "";
   const [f, setF] = useState({ startDate: "", endDate: "", type: "", days: "", halfDay: "", lead: defaultLead, comments: "" });
   const [err, setErr] = useState("");
+  const [balAlert, setBalAlert] = useState(null);
   const used = getUsed(records, user);
   const S = { width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", fontSize: 14, fontFamily: "inherit" };
 
   const chDate = (k, v) => { const nf = { ...f, [k]: v }; const wd = calcWorkDays(nf.startDate, nf.endDate); if (wd > 0) nf.days = nf.halfDay === "Yes" && wd === 1 ? 0.5 : wd; setF(nf); };
 
   const submit = () => {
+    setErr("");
     if (!f.startDate || !f.endDate || !f.type || !f.days || !f.lead) { setErr("Fill all required fields"); return; }
+    const days = Number(f.days);
     const lim = BAL[f.type];
-    if (lim !== undefined && Number(f.days) > lim - used[f.type]) { setErr("Insufficient " + f.type + " balance. " + (lim - used[f.type]) + " days left."); return; }
+    if (lim !== undefined) {
+      const remaining = lim - used[f.type];
+      if (remaining <= 0) {
+        setBalAlert({ type: f.type, remaining: 0, requested: days });
+        return;
+      }
+      if (days > remaining) {
+        setBalAlert({ type: f.type, remaining: remaining, requested: days });
+        return;
+      }
+    }
     onSubmit({ ...f, startDate: fromISO(f.startDate), endDate: fromISO(f.endDate) });
   };
+
+  const totalUsed = used.Annual + used.Casual + used.Sick;
+  const totalBal = BAL.Annual + BAL.Casual + BAL.Sick;
+  const totalLeft = totalBal - totalUsed;
 
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Request Leave</h2>
       <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Submitted directly to your Google Sheet. Lead will be notified.</p>
       <div style={{ display: "flex", gap: 10, marginBottom: 16, flexWrap: "wrap" }}>
-        {Object.entries(BAL).map(([t, total]) => (
-          <div key={t} style={{ padding: "8px 16px", borderRadius: 10, background: "var(--accent-bg)", fontSize: 13, fontWeight: 600, color: "var(--accent)" }}>{t}: {total - used[t]} left</div>
-        ))}
+        {Object.entries(BAL).map(([t, total]) => {
+          const left = total - used[t];
+          return (
+            <div key={t} style={{ padding: "8px 16px", borderRadius: 10, background: left <= 2 ? "rgba(239,68,68,0.1)" : "var(--accent-bg)", fontSize: 13, fontWeight: 600, color: left <= 2 ? "#ef4444" : "var(--accent)" }}>
+              {t}: {left} left of {total}
+            </div>
+          );
+        })}
+        <div style={{ padding: "8px 16px", borderRadius: 10, background: totalLeft < 5 ? "rgba(239,68,68,0.1)" : "var(--hover)", fontSize: 13, fontWeight: 700, color: totalLeft < 5 ? "#ef4444" : "var(--text)", border: "1px solid var(--border)" }}>
+          Total Left: {totalLeft} of {totalBal}
+        </div>
       </div>
+
+      {/* Balance exceeded popup */}
+      {balAlert && (
+        <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.5)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 999 }}>
+          <div style={{ background: "var(--card)", borderRadius: 16, padding: 28, width: 380, border: "1px solid #fca5a5", textAlign: "center", boxShadow: "0 20px 60px rgba(0,0,0,0.3)" }}>
+            <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
+            <div style={{ fontSize: 18, fontWeight: 800, color: "#ef4444", marginBottom: 8 }}>Insufficient Leave Balance</div>
+            <div style={{ fontSize: 14, color: "var(--text)", marginBottom: 6, lineHeight: 1.6 }}>
+              You requested <strong>{balAlert.requested} day{balAlert.requested !== 1 ? "s" : ""}</strong> of <strong>{balAlert.type}</strong> leave
+            </div>
+            <div style={{ fontSize: 14, color: "var(--muted)", marginBottom: 16, lineHeight: 1.6 }}>
+              {balAlert.remaining <= 0
+                ? <span>You have <strong style={{ color: "#ef4444" }}>0 days</strong> remaining in your {balAlert.type} balance.</span>
+                : <span>You only have <strong style={{ color: "#ef4444" }}>{balAlert.remaining} day{balAlert.remaining !== 1 ? "s" : ""}</strong> remaining in your {balAlert.type} balance.</span>
+              }
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 16, padding: "8px 12px", borderRadius: 8, background: "var(--hover)" }}>
+              Your {balAlert.type} balance: {BAL[balAlert.type]} total − {used[balAlert.type]} used = <strong>{balAlert.remaining} left</strong>
+            </div>
+            <button onClick={() => setBalAlert(null)} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: "#ef4444", color: "#fff", fontSize: 15, fontWeight: 700, cursor: "pointer" }}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
       <div style={{ background: "var(--card)", borderRadius: 14, padding: 24, border: "1px solid var(--border)", maxWidth: 560 }}>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
           <div><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Start Date *</div><input type="date" value={f.startDate} onChange={e => chDate("startDate", e.target.value)} style={S} /></div>
@@ -1234,10 +1284,13 @@ export default function DakotaLMS() {
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Sick</th>
                   <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
-                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Total Off</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11, borderLeft: "2px solid var(--border)" }}>Total Leaves</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Total Left</th>
                 </tr></thead>
                 <tbody>{filtered.map(d => {
-                  const totalOff = d.Annual + d.Casual + d.Sick;
+                  const totalTaken = d.Annual + d.Casual + d.Sick;
+                  const totalBal = (BAL.Annual + BAL.Casual + BAL.Sick);
+                  const totalLeft = totalBal - totalTaken;
                   return (
                   <tr key={d.name} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{d.name}</td>
@@ -1247,7 +1300,8 @@ export default function DakotaLMS() {
                     <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Casual - d.Casual <= 2 ? "#ef4444" : BAL.Casual - d.Casual <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Casual - d.Casual}</td>
                     <td style={{ padding: "8px 14px" }}>{d.Sick}</td>
                     <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Sick - d.Sick <= 2 ? "#ef4444" : BAL.Sick - d.Sick <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Sick - d.Sick}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 700, color: totalOff >= 15 ? "#ef4444" : totalOff >= 10 ? "#d97706" : "var(--text)" }}>{totalOff}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 700, borderLeft: "2px solid var(--border)" }}>{totalTaken}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 700, color: totalLeft < 5 ? "#ef4444" : totalLeft < 10 ? "#d97706" : "var(--accent)" }}>{totalLeft}</td>
                   </tr>
                   );
                 })}</tbody>
