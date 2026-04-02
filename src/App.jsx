@@ -5,7 +5,8 @@ const LEADS = ["Sarfraz Haider", "Faraz Anjum", "Haad Khan", "Nasir Ahmad", "Nav
 const EMPLOYEES = ["Farhan Farrukh","Haad Khan","Khizar Masood","Mahnoor Qureshi","Muhammad Maaz","Mubashar Hassan","Misbah Qureshi","Nasir Mehmood","Sarfraz Haider","Abdul Wasay Bin Zahid","Atif Ilyas","Fahad Shah","Faraz Anjum","Hamza Arshad","Ihtisham Khan","Jamal Khan","Majid Zulfiqar","Mehtab Shahid","Minal Haider","Muhammad Nabeel","Muhammad Umar Farooq","Naveed Zafar","Rafiq Ahmad","Rana Atif","Saad Sultan","Adil Khalid Abbasi","Faiq Lattifi","Hafsah Maqbool","Haseeb Tariq","Mansoor Ahmed","Muhammad Junaid","Muhammad Naseer","Nabeela Azhar","Nasir Ahmad","Yousaf Munir","Abdullah Zafar","Ahnan Ahmad","Ahsan Jamil","Asad Zarif Abbasi","Faheem Ullah","Faryal Zohaib","Haider Ali Shah","Hamza Rehman","Hassan Kiyani","Kanwal Talib","M Bilal Abbas","Muhammad Aamir Abbas","Muhammad Shahbaz","Muhammad Umer Nawaz","Muhammad Zubair Haider","Naima Iman","Qasim Umar","Rida Arshad","Zubair Khurshid","Sundas Arif","Syed Waqas","Adnan Ahmad"];
 const LEAVE_TYPES = ["Annual", "Casual", "Sick", "Bereavement leave (Immediate Family)", "Maternity/Paternity Leave"];
 const BAL = { Annual: 14, Casual: 10, Sick: 10 };
-const DEFAULT_PW = "dakota2026";
+const MGR_PW = "dakota@mgr2026";
+const LEAD_PW = "dakota@lead2026";
 
 function getRole(n) {
   if (MANAGERS.includes(n)) return "manager";
@@ -356,9 +357,14 @@ function LoginScreen({ onLogin }) {
   const [err, setErr] = useState("");
   const [show, setShow] = useState(false);
   const needsPw = sel && (MANAGERS.includes(sel) || LEADS.includes(sel));
+  const isSelMgr = MANAGERS.includes(sel);
 
   const handleSelect = (n) => { setSel(n); setPw(""); setErr(""); if (n && !MANAGERS.includes(n) && !LEADS.includes(n)) onLogin(n); };
-  const handleLogin = () => { if (pw === DEFAULT_PW) onLogin(sel); else { setErr("Incorrect password"); setPw(""); } };
+  const handleLogin = () => {
+    const correctPw = isSelMgr ? MGR_PW : LEAD_PW;
+    if (pw === correctPw) onLogin(sel);
+    else { setErr("Incorrect password"); setPw(""); }
+  };
 
   return (
     <div style={{ width: "100%", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif", background: "linear-gradient(135deg,#0f172a,#1e293b)" }}>
@@ -569,13 +575,14 @@ export default function DakotaLMS() {
                 Recent Activity {role === "employee" ? "(Your Requests)" : role === "lead" ? "(Your Team)" : "(All)"}
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "var(--hover)" }}>{["Name", "Type", "Days", "Period", "Status"].map(h => <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ background: "var(--hover)" }}>{["Name", "Type", "Days", "Period", "Lead", "Status"].map(h => <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
                 <tbody>{dashRecs.slice(-10).reverse().map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}>{r.type}</td>
                     <td style={{ padding: "8px 14px" }}>{r.days}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
+                    <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
                     <td style={{ padding: "8px 14px" }}><Badge status={r.status} /></td>
                   </tr>
                 ))}</tbody>
@@ -660,13 +667,14 @@ export default function DakotaLMS() {
             <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Changes sync directly to Google Sheet.</p>
             <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "var(--hover)" }}>{["Employee", "Type", "Period", "Days", "Status", "Actions"].map(h => <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
+                <thead><tr style={{ background: "var(--hover)" }}>{["Employee", "Type", "Period", "Days", "Lead", "Status", "Actions"].map(h => <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
                 <tbody>{records.filter(r => canManage(r)).slice().reverse().slice(0, 40).map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}>{r.type}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "8px 14px" }}>{r.days}</td>
+                    <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
                     <td style={{ padding: "8px 14px" }}><Badge status={r.status} /></td>
                     <td style={{ padding: "8px 14px" }}>
                       <div style={{ display: "flex", gap: 4 }}>
