@@ -1,12 +1,90 @@
 import { useState, useRef, useEffect } from "react";
 
-const MANAGERS = ["Farhan Farrukh", "Sarfraz Haider", "Haad Khan"];
+const MANAGERS = ["Farhan Farrukh", "Sarfraz Haider", "Haad Khan", "Muhammad Maaz"];
 const LEADS = ["Sarfraz Haider", "Faraz Anjum", "Haad Khan", "Nasir Ahmad", "Naveed Zafar", "Misbah Qureshi", "Farhan Farrukh", "Majid Zulfiqar"];
 const EMPLOYEES = ["Farhan Farrukh","Haad Khan","Khizar Masood","Mahnoor Qureshi","Muhammad Maaz","Mubashar Hassan","Misbah Qureshi","Nasir Mehmood","Sarfraz Haider","Abdul Wasay Bin Zahid","Atif Ilyas","Fahad Shah","Faraz Anjum","Hamza Arshad","Ihtisham Khan","Jamal Khan","Majid Zulfiqar","Mehtab Shahid","Minal Haider","Muhammad Nabeel","Muhammad Umar Farooq","Naveed Zafar","Rafiq Ahmad","Rana Atif","Saad Sultan","Adil Khalid Abbasi","Faiq Lattifi","Hafsah Maqbool","Haseeb Tariq","Mansoor Ahmed","Muhammad Junaid","Muhammad Naseer","Nabeela Azhar","Nasir Ahmad","Yousaf Munir","Abdullah Zafar","Ahnan Ahmad","Ahsan Jamil","Asad Zarif Abbasi","Faheem Ullah","Faryal Zohaib","Haider Ali Shah","Hamza Rehman","Hassan Kiyani","Kanwal Talib","M Bilal Abbas","Muhammad Aamir Abbas","Muhammad Shahbaz","Muhammad Umer Nawaz","Muhammad Zubair Haider","Naima Iman","Qasim Umar","Rida Arshad","Zubair Khurshid","Sundas Arif","Syed Waqas","Adnan Ahmad"];
 const LEAVE_TYPES = ["Annual", "Casual", "Sick", "Bereavement leave (Immediate Family)", "Maternity/Paternity Leave"];
 const BAL = { Annual: 14, Casual: 10, Sick: 10 };
 const MGR_PW = "dakota@mgr2026";
 const LEAD_PW = "dakota@lead2026";
+
+// Team mapping: employee name → default WorkStream Lead
+const TEAM_MAP = {
+  // Sarfraz Haider's team
+  "Haseeb Tariq": "Sarfraz Haider",
+  "Mahnoor Qureshi": "Sarfraz Haider",
+  "Qasim Umar": "Sarfraz Haider",
+  "Naima Iman": "Sarfraz Haider",
+  "Nabeela Azhar": "Sarfraz Haider",
+  "Muhammad Umer Nawaz": "Sarfraz Haider",
+  "Adil Khalid Abbasi": "Sarfraz Haider",
+  "Atif Ilyas": "Sarfraz Haider",
+  "Muhammad Zubair Haider": "Sarfraz Haider",
+  "Muhammad Naseer": "Sarfraz Haider",
+  "Nasir Mehmood": "Sarfraz Haider",
+  "Rafiq Ahmad": "Sarfraz Haider",
+  "Yousaf Munir": "Sarfraz Haider",
+
+  // Haad Khan's team
+  "Mubashar Hassan": "Haad Khan",
+  "Rida Arshad": "Haad Khan",
+  "Mehtab Shahid": "Haad Khan",
+  "Muhammad Junaid": "Haad Khan",
+  "Mansoor Ahmed": "Haad Khan",
+  "Zubair Khurshid": "Haad Khan",
+  "Syed Waqas": "Haad Khan",
+
+  // Majid Zulfiqar's team
+  "Khizar Masood": "Majid Zulfiqar",
+  "Saad Sultan": "Majid Zulfiqar",
+
+  // Faraz Anjum's team
+  "Faheem Ullah": "Faraz Anjum",
+  "Ahsan Jamil": "Faraz Anjum",
+  "Kanwal Talib": "Faraz Anjum",
+  "Rana Atif": "Faraz Anjum",
+
+  // Misbah Qureshi's team
+  "Abdul Wasay Bin Zahid": "Misbah Qureshi",
+  "Fahad Shah": "Misbah Qureshi",
+  "Muhammad Shahbaz": "Misbah Qureshi",
+  "Sundas Arif": "Misbah Qureshi",
+  "Muhammad Umar Farooq": "Misbah Qureshi",
+  "Muhammad Aamir Abbas": "Misbah Qureshi",
+  "Adnan Ahmad": "Misbah Qureshi",
+  "Asad Zarif Abbasi": "Misbah Qureshi",
+  "Abdullah Zafar": "Misbah Qureshi",
+  "Hamza Rehman": "Misbah Qureshi",
+  "M Bilal Abbas": "Misbah Qureshi",
+  "Faryal Zohaib": "Misbah Qureshi",
+  "Haider Ali Shah": "Misbah Qureshi",
+  "Hassan Kiyani": "Misbah Qureshi",
+  "Ahnan Ahmad": "Misbah Qureshi",
+
+  // Nasir Ahmad's team
+  "Minal Haider": "Nasir Ahmad",
+  "Faiq Lattifi": "Nasir Ahmad",
+  "Ihtisham Khan": "Nasir Ahmad",
+
+  // Naveed Zafar's team
+  "Hamza Arshad": "Naveed Zafar",
+  "Muhammad Nabeel": "Naveed Zafar",
+
+  // Leads & Managers report to Farhan
+  "Sarfraz Haider": "Farhan Farrukh",
+  "Haad Khan": "Farhan Farrukh",
+  "Misbah Qureshi": "Farhan Farrukh",
+  "Nasir Ahmad": "Farhan Farrukh",
+  "Naveed Zafar": "Farhan Farrukh",
+  "Faraz Anjum": "Farhan Farrukh",
+  "Majid Zulfiqar": "Farhan Farrukh",
+  "Muhammad Maaz": "Farhan Farrukh",
+  "Farhan Farrukh": "Farhan Farrukh",
+
+  // Farhan's direct team
+  "Jamal Khan": "Farhan Farrukh",
+  "Hafsah Maqbool": "Farhan Farrukh",
+};
 
 function getRole(n) {
   if (MANAGERS.includes(n)) return "manager";
@@ -166,7 +244,8 @@ function EditModal({ record, onSave, onClose }) {
 
 // ═══ REQUEST LEAVE FORM ═══
 function RequestForm({ user, records, onSubmit, loading }) {
-  const [f, setF] = useState({ startDate: "", endDate: "", type: "", days: "", halfDay: "", lead: "", comments: "" });
+  const defaultLead = TEAM_MAP[user] || "";
+  const [f, setF] = useState({ startDate: "", endDate: "", type: "", days: "", halfDay: "", lead: defaultLead, comments: "" });
   const [err, setErr] = useState("");
   const used = getUsed(records, user);
   const S = { width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", fontSize: 14, fontFamily: "inherit" };
@@ -356,15 +435,33 @@ function LoginScreen({ onLogin }) {
   const [pw, setPw] = useState("");
   const [err, setErr] = useState("");
   const [show, setShow] = useState(false);
+  const [search, setSearch] = useState("");
+  const [dropOpen, setDropOpen] = useState(false);
+  const searchRef = useRef(null);
   const needsPw = sel && (MANAGERS.includes(sel) || LEADS.includes(sel));
   const isSelMgr = MANAGERS.includes(sel);
 
-  const handleSelect = (n) => { setSel(n); setPw(""); setErr(""); if (n && !MANAGERS.includes(n) && !LEADS.includes(n)) onLogin(n); };
+  const sorted = [...EMPLOYEES].sort();
+  const filtered = search.trim()
+    ? sorted.filter(n => n.toLowerCase().includes(search.toLowerCase()))
+    : sorted;
+
+  const handlePick = (n) => {
+    setSel(n);
+    setSearch(n);
+    setDropOpen(false);
+    setPw("");
+    setErr("");
+    if (n && !MANAGERS.includes(n) && !LEADS.includes(n)) onLogin(n);
+  };
+
   const handleLogin = () => {
     const correctPw = isSelMgr ? MGR_PW : LEAD_PW;
     if (pw === correctPw) onLogin(sel);
     else { setErr("Incorrect password"); setPw(""); }
   };
+
+  const roleTag = (n) => MANAGERS.includes(n) ? " (Mgr)" : LEADS.includes(n) ? " (Lead)" : "";
 
   return (
     <div style={{ width: "100%", height: "100vh", display: "flex", alignItems: "center", justifyContent: "center", fontFamily: "'DM Sans',sans-serif", background: "linear-gradient(135deg,#0f172a,#1e293b)" }}>
@@ -375,11 +472,63 @@ function LoginScreen({ onLogin }) {
           <div style={{ fontSize: 22, fontWeight: 800, color: "#f1f5f9" }}>Dakota LMS</div>
           <div style={{ fontSize: 13, color: "#94a3b8", marginTop: 4 }}>Leave Management System</div>
         </div>
-        <div style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>SELECT YOUR NAME</div>
-        <select value={sel} onChange={e => handleSelect(e.target.value)} style={{ width: "100%", padding: "12px", borderRadius: 10, border: "1px solid #475569", background: "#0f172a", color: "#e2e8f0", fontSize: 14, fontFamily: "inherit", marginBottom: needsPw ? 16 : 0 }}>
-          <option value="" disabled>Choose...</option>
-          {[...EMPLOYEES].sort().map(n => <option key={n} value={n}>{n}{MANAGERS.includes(n) ? " (Mgr)" : LEADS.includes(n) ? " (Lead)" : ""}</option>)}
-        </select>
+        <div style={{ fontSize: 12, fontWeight: 600, color: "#94a3b8", marginBottom: 6 }}>TYPE YOUR NAME TO SEARCH</div>
+        <div style={{ position: "relative", marginBottom: needsPw ? 16 : 0 }}>
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={e => { setSearch(e.target.value); setDropOpen(true); setSel(""); }}
+            onFocus={() => setDropOpen(true)}
+            placeholder="Start typing your name..."
+            style={{
+              width: "100%", padding: "12px 40px 12px 14px", borderRadius: 10,
+              border: sel ? "1px solid #009b8d" : "1px solid #475569",
+              background: "#0f172a", color: "#e2e8f0", fontSize: 14, fontFamily: "inherit",
+            }}
+          />
+          <span style={{ position: "absolute", right: 14, top: "50%", transform: "translateY(-50%)", color: "#64748b", fontSize: 14 }}>
+            {sel ? "✅" : "🔍"}
+          </span>
+
+          {dropOpen && !sel && (
+            <div style={{
+              position: "absolute", top: "calc(100% + 4px)", left: 0, right: 0,
+              maxHeight: 220, overflow: "auto", borderRadius: 10,
+              background: "#0f172a", border: "1px solid #475569",
+              zIndex: 100, boxShadow: "0 10px 30px rgba(0,0,0,0.4)",
+            }}>
+              {filtered.length === 0 && (
+                <div style={{ padding: "12px 14px", color: "#64748b", fontSize: 13 }}>No match found</div>
+              )}
+              {filtered.map(n => (
+                <div
+                  key={n}
+                  onClick={() => handlePick(n)}
+                  style={{
+                    padding: "10px 14px", cursor: "pointer", fontSize: 14,
+                    color: "#e2e8f0", borderBottom: "1px solid #1e293b",
+                    display: "flex", justifyContent: "space-between", alignItems: "center",
+                  }}
+                  onMouseEnter={e => e.currentTarget.style.background = "#1e293b"}
+                  onMouseLeave={e => e.currentTarget.style.background = "transparent"}
+                >
+                  <span>{n}</span>
+                  {roleTag(n) && (
+                    <span style={{
+                      fontSize: 10, padding: "2px 8px", borderRadius: 4,
+                      background: MANAGERS.includes(n) ? "rgba(245,158,11,0.15)" : "rgba(0,155,141,0.15)",
+                      color: MANAGERS.includes(n) ? "#f59e0b" : "#00c9a7",
+                      fontWeight: 600,
+                    }}>
+                      {MANAGERS.includes(n) ? "MGR" : "LEAD"}
+                    </span>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
         {needsPw && (
           <div>
             <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 8 }}>
@@ -395,7 +544,12 @@ function LoginScreen({ onLogin }) {
             <button onClick={handleLogin} style={{ width: "100%", padding: 12, borderRadius: 10, border: "none", background: pw ? "#009b8d" : "#334155", color: pw ? "#fff" : "#64748b", fontSize: 15, fontWeight: 700 }}>Sign In</button>
           </div>
         )}
-        {!needsPw && !sel && <div style={{ fontSize: 11, color: "#64748b", marginTop: 10, textAlign: "center" }}>Managers & Leads require password</div>}
+
+        {!needsPw && !sel && (
+          <div style={{ fontSize: 11, color: "#64748b", marginTop: 10, textAlign: "center" }}>
+            Managers & Leads require password
+          </div>
+        )}
       </div>
     </div>
   );
@@ -471,7 +625,8 @@ export default function DakotaLMS() {
   const myRecs = records.filter(r => r.name === user);
   const used = getUsed(records, user);
   const pending = isApprover ? records.filter(r => r.lead === user && (r.status === "Pending" || r.status === "")) : [];
-  const teamRecs = isApprover ? records.filter(r => r.lead === user) : [];
+  const showAllTeam = (user === "Farhan Farrukh" || user === "Muhammad Maaz");
+  const teamRecs = isApprover ? (showAllTeam ? records : records.filter(r => r.lead === user)) : [];
   const canManage = (r) => isApprover && (r.lead === user || MANAGERS.includes(user));
 
   const allTabs = [
