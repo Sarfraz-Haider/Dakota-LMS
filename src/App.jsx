@@ -888,6 +888,9 @@ export default function DakotaLMS() {
   const [syncing, setSyncing] = useState(false);
   const [ready, setReady] = useState(false);
   const [fetchErr, setFetchErr] = useState("");
+  const [sortCol, setSortCol] = useState("date");
+  const [sortDir, setSortDir] = useState("desc");
+  const [dashSort, setDashSort] = useState({ col: "date", dir: "desc" });
 
   // Fetch records from Google Sheet
   const fetchData = async () => {
@@ -946,6 +949,38 @@ export default function DakotaLMS() {
   const showAllTeam = (user === "Farhan Farrukh" || user === "Muhammad Maaz");
   const teamRecs = isApprover ? (showAllTeam ? records : records.filter(r => r.lead === user)) : [];
   const canManage = (r) => isApprover && (r.lead === user || MANAGERS.includes(user));
+
+  // Sort helper
+  const sortRecords = (recs, col, dir) => {
+    const sorted = [...recs].sort((a, b) => {
+      let va = "", vb = "";
+      if (col === "name") { va = a.name; vb = b.name; }
+      else if (col === "type") { va = a.type; vb = b.type; }
+      else if (col === "days") { return dir === "asc" ? (Number(a.days) - Number(b.days)) : (Number(b.days) - Number(a.days)); }
+      else if (col === "lead") { va = a.lead; vb = b.lead; }
+      else if (col === "status") { va = a.status || "Pending"; vb = b.status || "Pending"; }
+      else if (col === "date") { va = toISO(a.startDate) || ""; vb = toISO(b.startDate) || ""; }
+      else { va = toISO(a.startDate) || ""; vb = toISO(b.startDate) || ""; }
+      if (va < vb) return dir === "asc" ? -1 : 1;
+      if (va > vb) return dir === "asc" ? 1 : -1;
+      return 0;
+    });
+    return sorted;
+  };
+
+  const toggleSort = (col, currentCol, currentDir, setCol, setDir) => {
+    if (currentCol === col) setDir(currentDir === "asc" ? "desc" : "asc");
+    else { setCol(col); setDir("asc"); }
+  };
+
+  const SortHeader = ({ label, col, activeCol, activeDir, onSort }) => (
+    <th onClick={() => onSort(col)} style={{
+      padding: "8px 14px", textAlign: "left", fontWeight: 600, color: activeCol === col ? "var(--accent)" : "var(--muted)",
+      fontSize: 11, cursor: "pointer", userSelect: "none", whiteSpace: "nowrap",
+    }}>
+      {label} {activeCol === col ? (activeDir === "asc" ? "▲" : "▼") : "⇅"}
+    </th>
+  );
 
   const allTabs = [
     { id: "dashboard", icon: "📊", label: "Dashboard" },
@@ -1049,8 +1084,15 @@ export default function DakotaLMS() {
                 Recent Activity {role === "employee" ? "(Your Requests)" : role === "lead" ? "(Your Team)" : "(All)"}
               </div>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "var(--hover)" }}>{["Name", "Type", "Days", "Period", "Lead", "Status"].map(h => <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
-                <tbody>{dashRecs.slice(-10).reverse().map((r, i) => (
+                <thead><tr style={{ background: "var(--hover)" }}>
+                  <SortHeader label="Name" col="name" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
+                  <SortHeader label="Type" col="type" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
+                  <SortHeader label="Days" col="days" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
+                  <SortHeader label="Period" col="date" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
+                  <SortHeader label="Lead" col="lead" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
+                  <SortHeader label="Status" col="status" activeCol={dashSort.col} activeDir={dashSort.dir} onSort={c => { setDashSort(s => ({ col: c, dir: s.col === c && s.dir === "asc" ? "desc" : "asc" })); }} />
+                </tr></thead>
+                <tbody>{sortRecords(dashRecs, dashSort.col, dashSort.dir).slice(0, 15).map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}>{r.type}</td>
@@ -1137,13 +1179,22 @@ export default function DakotaLMS() {
 
         {tab === "analytics" && isApprover && <Analytics records={records} user={user} />}
 
-        {tab === "manage" && isApprover && (          <div>
+        {tab === "manage" && isApprover && (
+          <div>
             <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Manage Requests</h2>
-            <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Changes sync directly to Google Sheet.</p>
+            <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 16 }}>Click column headers to sort. Changes sync to Google Sheet.</p>
             <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "var(--hover)" }}>{["Employee", "Type", "Period", "Days", "Lead", "Status", "Actions"].map(h => <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
-                <tbody>{records.filter(r => canManage(r)).slice().reverse().slice(0, 40).map((r, i) => (
+                <thead><tr style={{ background: "var(--hover)" }}>
+                  <SortHeader label="Employee" col="name" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
+                  <SortHeader label="Type" col="type" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
+                  <SortHeader label="Period" col="date" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
+                  <SortHeader label="Days" col="days" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
+                  <SortHeader label="Lead" col="lead" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
+                  <SortHeader label="Status" col="status" activeCol={sortCol} activeDir={sortDir} onSort={c => toggleSort(c, sortCol, sortDir, setSortCol, setSortDir)} />
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Actions</th>
+                </tr></thead>
+                <tbody>{sortRecords(records.filter(r => canManage(r)), sortCol, sortDir).slice(0, 50).map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}>{r.type}</td>
