@@ -890,6 +890,8 @@ export default function DakotaLMS() {
   const [fetchErr, setFetchErr] = useState("");
   const [filters, setFilters] = useState({ name: "", type: "", lead: "", status: "" });
   const [dashFilters, setDashFilters] = useState({ name: "", type: "", lead: "", status: "" });
+  const [teamFilter, setTeamFilter] = useState("");
+  const [teamLowBal, setTeamLowBal] = useState(false);
   const [activeFilter, setActiveFilter] = useState(null);
   const [activeDashFilter, setActiveDashFilter] = useState(null);
 
@@ -1183,27 +1185,77 @@ export default function DakotaLMS() {
           </div>
         )}
 
-        {tab === "team" && isApprover && (
+        {tab === "team" && isApprover && (() => {
+          const teamNames = [...new Set(teamRecs.map(r => r.name))].sort();
+          const teamData = teamNames.map(name => ({ name, ...getUsed(records, name) }));
+          const filtered = teamData.filter(d => {
+            if (teamFilter && d.name !== teamFilter) return false;
+            if (teamLowBal && (BAL.Annual - d.Annual > 3) && (BAL.Casual - d.Casual > 3) && (BAL.Sick - d.Sick > 3)) return false;
+            return true;
+          });
+          return (
           <div>
-            <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 16 }}>Team Balances</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16, flexWrap: "wrap", gap: 8 }}>
+              <h2 style={{ fontSize: 20, fontWeight: 800 }}>Team Balances</h2>
+              <div style={{ display: "flex", gap: 8, alignItems: "center", flexWrap: "wrap" }}>
+                <select value={teamFilter} onChange={e => setTeamFilter(e.target.value)}
+                  style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", fontSize: 12, fontFamily: "inherit" }}>
+                  <option value="">All Employees ({teamNames.length})</option>
+                  {teamNames.map(n => <option key={n} value={n}>{n}</option>)}
+                </select>
+                <button onClick={() => setTeamLowBal(!teamLowBal)}
+                  style={{
+                    padding: "6px 14px", borderRadius: 8, fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                    border: teamLowBal ? "1px solid #ef4444" : "1px solid var(--border)",
+                    background: teamLowBal ? "rgba(239,68,68,0.1)" : "transparent",
+                    color: teamLowBal ? "#ef4444" : "var(--muted)",
+                  }}>
+                  {teamLowBal ? "⚠️ Low Balance ON" : "⚠️ Low Balance"}
+                </button>
+                {(teamFilter || teamLowBal) && (
+                  <button onClick={() => { setTeamFilter(""); setTeamLowBal(false); }}
+                    style={{ padding: "6px 12px", borderRadius: 8, border: "1px solid var(--accent)", background: "var(--accent-bg)", color: "var(--accent)", fontSize: 12, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}>
+                    Clear Filters
+                  </button>
+                )}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 10 }}>
+              Showing {filtered.length} of {teamNames.length} employees
+              {teamLowBal && " · Filtered to employees with ≤3 days left in any category"}
+            </div>
             <div style={{ background: "var(--card)", borderRadius: 12, border: "1px solid var(--border)", overflow: "auto" }}>
               <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
-                <thead><tr style={{ background: "var(--hover)" }}>{["Employee", "Annual", "Left", "Casual", "Left", "Sick", "Left"].map((h, i) => <th key={i} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
-                <tbody>{[...new Set(teamRecs.map(r => r.name))].sort().map(name => { const u = getUsed(records, name); return (
-                  <tr key={name} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "8px 14px", fontWeight: 600 }}>{name}</td>
-                    <td style={{ padding: "8px 14px" }}>{u.Annual}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Annual - u.Annual <= 2 ? "#ef4444" : "var(--accent)" }}>{BAL.Annual - u.Annual}</td>
-                    <td style={{ padding: "8px 14px" }}>{u.Casual}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Casual - u.Casual <= 2 ? "#ef4444" : "var(--accent)" }}>{BAL.Casual - u.Casual}</td>
-                    <td style={{ padding: "8px 14px" }}>{u.Sick}</td>
-                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Sick - u.Sick <= 2 ? "#ef4444" : "var(--accent)" }}>{BAL.Sick - u.Sick}</td>
+                <thead><tr style={{ background: "var(--hover)" }}>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Employee</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Annual</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Casual</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Sick</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Left</th>
+                  <th style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>Total Off</th>
+                </tr></thead>
+                <tbody>{filtered.map(d => {
+                  const totalOff = d.Annual + d.Casual + d.Sick;
+                  return (
+                  <tr key={d.name} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "8px 14px", fontWeight: 600 }}>{d.name}</td>
+                    <td style={{ padding: "8px 14px" }}>{d.Annual}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Annual - d.Annual <= 2 ? "#ef4444" : BAL.Annual - d.Annual <= 5 ? "#d97706" : "var(--accent)" }}>{BAL.Annual - d.Annual}</td>
+                    <td style={{ padding: "8px 14px" }}>{d.Casual}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Casual - d.Casual <= 2 ? "#ef4444" : BAL.Casual - d.Casual <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Casual - d.Casual}</td>
+                    <td style={{ padding: "8px 14px" }}>{d.Sick}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 600, color: BAL.Sick - d.Sick <= 2 ? "#ef4444" : BAL.Sick - d.Sick <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Sick - d.Sick}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 700, color: totalOff >= 15 ? "#ef4444" : totalOff >= 10 ? "#d97706" : "var(--text)" }}>{totalOff}</td>
                   </tr>
-                ); })}</tbody>
+                  );
+                })}</tbody>
               </table>
             </div>
           </div>
-        )}
+          );
+        })()}
 
         {tab === "analytics" && isApprover && <Analytics records={records} user={user} />}
 
