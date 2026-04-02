@@ -343,7 +343,18 @@ function RequestForm({ user, records, onSubmit, loading }) {
 function Analytics({ records, user }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
-  const [drill, setDrill] = useState(null); // { type, title, records }
+  const [drill, setDrill] = useState(null);
+
+  // Week state: store the Monday of the selected week
+  const getMonday = (dateStr) => {
+    const d = new Date(dateStr + "T00:00:00");
+    const day = d.getDay();
+    const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+    d.setDate(diff);
+    return d.toISOString().slice(0, 10);
+  };
+  const [weekStart, setWeekStart] = useState(getMonday(new Date().toISOString().slice(0, 10)));
+  const [weekDrill, setWeekDrill] = useState(null);
 
   const parseToISO = (ds) => toISO(ds);
 
@@ -498,6 +509,127 @@ function Analytics({ records, user }) {
           </table>
         )}
       </div>
+
+      {/* ── Weekly Overview ── */}
+      {(() => {
+        // Compute week days Mon-Fri
+        const wDays = [];
+        for (let i = 0; i < 5; i++) {
+          const d = new Date(weekStart + "T00:00:00");
+          d.setDate(d.getDate() + i);
+          const iso = d.toISOString().slice(0, 10);
+          const offList = records.filter(r => isOnLeave(r, iso));
+          wDays.push({ iso, dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()], day: d.getDate(), month: d.getMonth() + 1, records: offList });
+        }
+        const weekEnd = wDays[4].iso;
+        const weekReqs = records.filter(r => {
+          if (r.status === "Rejected") return false;
+          const s = parseToISO(r.startDate);
+          return s && s >= weekStart && s <= weekEnd;
+        });
+        const weekTotalDays = weekReqs.reduce((s, r) => s + (Number(r.days) || 0), 0);
+        const weekUniqueOff = [...new Set(wDays.flatMap(d => d.records.map(r => r.name)))].length;
+        const weekPeak = wDays.reduce((max, d) => d.records.length > max.count ? { ...d, count: d.records.length } : max, { count: 0 });
+
+        const prevWeek = () => { const d = new Date(weekStart + "T00:00:00"); d.setDate(d.getDate() - 7); setWeekStart(d.toISOString().slice(0, 10)); setWeekDrill(null); };
+        const nextWeek = () => { const d = new Date(weekStart + "T00:00:00"); d.setDate(d.getDate() + 7); setWeekStart(d.toISOString().slice(0, 10)); setWeekDrill(null); };
+        const thisWeek = () => { setWeekStart(getMonday(new Date().toISOString().slice(0, 10))); setWeekDrill(null); };
+
+        return (
+        <div style={{ ...cardStyle, marginBottom: 16 }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14, flexWrap: "wrap", gap: 10 }}>
+            <div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>📅 Weekly Overview</div>
+              <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 2 }}>Click any day for details</div>
+            </div>
+            <div style={{ display: "flex", gap: 6, alignItems: "center", flexWrap: "wrap" }}>
+              <button onClick={prevWeek} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text)", cursor: "pointer", fontSize: 14 }}>◀</button>
+              <input type="date" value={weekStart} onChange={e => { const v = e.target.value; if (v) { setWeekStart(getMonday(v)); setWeekDrill(null); } }}
+                style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 12, fontFamily: "inherit" }} />
+              <button onClick={thisWeek} style={{ padding: "5px 12px", borderRadius: 6, border: "1px solid var(--accent)", background: "var(--accent-bg)", color: "var(--accent)", cursor: "pointer", fontSize: 11, fontWeight: 600, fontFamily: "inherit" }}>Today</button>
+              <button onClick={nextWeek} style={{ padding: "5px 10px", borderRadius: 6, border: "1px solid var(--border)", background: "transparent", color: "var(--text)", cursor: "pointer", fontSize: 14 }}>▶</button>
+            </div>
+          </div>
+
+          <div style={{ fontSize: 13, fontWeight: 600, color: "var(--text)", marginBottom: 12 }}>
+            {dispDate(weekStart)} — {dispDate(weekEnd)}
+          </div>
+
+          {/* Week day cards */}
+          <div style={{ display: "flex", gap: 8, marginBottom: 12, flexWrap: "wrap" }}>
+            {wDays.map((d, i) => {
+              const isActive = weekDrill?.iso === d.iso;
+              const bg = d.records.length === 0 ? "var(--hover)" : d.records.length >= 5 ? "#ef4444" : d.records.length >= 3 ? "#f59e0b" : "var(--accent)";
+              return (
+                <div key={i} onClick={() => d.records.length > 0 ? setWeekDrill(isActive ? null : { iso: d.iso, title: d.dayName + " " + dispDate(d.iso), records: d.records }) : null}
+                  style={{
+                    flex: "1 1 80px", minWidth: 80, padding: "12px 10px", borderRadius: 10, textAlign: "center", cursor: d.records.length > 0 ? "pointer" : "default",
+                    border: isActive ? "2px solid var(--text)" : "1px solid var(--border)",
+                    background: d.records.length > 0 ? (isActive ? "var(--accent-bg)" : "var(--hover)") : "var(--hover)",
+                    opacity: d.records.length === 0 ? 0.6 : 1, transition: "all 0.15s",
+                  }}>
+                  <div style={{ fontSize: 11, fontWeight: 600, color: "var(--muted)", marginBottom: 4 }}>{d.dayName}</div>
+                  <div style={{ fontSize: 12, color: "var(--muted)", marginBottom: 6 }}>{d.month}/{d.day}</div>
+                  <div style={{
+                    display: "inline-block", width: 32, height: 32, borderRadius: "50%", lineHeight: "32px", fontSize: 14, fontWeight: 800,
+                    background: bg, color: d.records.length > 0 ? "#fff" : "var(--muted)",
+                  }}>{d.records.length}</div>
+                  <div style={{ fontSize: 10, color: "var(--muted)", marginTop: 4 }}>{d.records.length === 0 ? "All in" : d.records.length + " off"}</div>
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Week summary */}
+          <div style={{ display: "flex", gap: 10, marginBottom: 12, flexWrap: "wrap" }}>
+            <div style={{ flex: "1 1 100px", padding: "10px 14px", borderRadius: 8, background: "var(--hover)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>TOTAL DAYS</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{weekTotalDays}</div>
+            </div>
+            <div style={{ flex: "1 1 100px", padding: "10px 14px", borderRadius: 8, background: "var(--hover)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>PEOPLE OFF</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{weekUniqueOff}</div>
+            </div>
+            <div style={{ flex: "1 1 100px", padding: "10px 14px", borderRadius: 8, background: "var(--hover)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>BUSIEST DAY</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{weekPeak.count > 0 ? weekPeak.count : "—"}</div>
+              {weekPeak.count > 0 && <div style={{ fontSize: 10, color: "var(--muted)" }}>{weekPeak.dayName}</div>}
+            </div>
+            <div style={{ flex: "1 1 100px", padding: "10px 14px", borderRadius: 8, background: "var(--hover)", border: "1px solid var(--border)" }}>
+              <div style={{ fontSize: 10, color: "var(--muted)", fontWeight: 600, marginBottom: 2 }}>REQUESTS</div>
+              <div style={{ fontSize: 20, fontWeight: 800 }}>{weekReqs.length}</div>
+            </div>
+          </div>
+
+          {/* Week drill-down */}
+          {weekDrill && (
+            <div style={{ background: "var(--hover)", borderRadius: 10, border: "1px solid var(--accent)", padding: "12px 16px" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <div style={{ fontSize: 14, fontWeight: 700, color: "var(--accent)" }}>{weekDrill.title} — {weekDrill.records.length} off</div>
+                <button onClick={() => setWeekDrill(null)} style={{ background: "none", border: "none", fontSize: 16, color: "var(--muted)", cursor: "pointer" }}>✕</button>
+              </div>
+              <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 12 }}>
+                <thead><tr style={{ background: "var(--card)" }}>
+                  {["Employee", "Type", "Days", "Full Period", "Lead", "Status"].map(h => (
+                    <th key={h} style={{ padding: "7px 10px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>{h}</th>
+                  ))}
+                </tr></thead>
+                <tbody>{weekDrill.records.map((r, i) => (
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
+                    <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
+                    <td style={{ padding: "7px 10px" }}>{r.type}</td>
+                    <td style={{ padding: "7px 10px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
+                    <td style={{ padding: "7px 10px", fontSize: 11, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
+                    <td style={{ padding: "7px 10px", fontSize: 11 }}>{r.lead}</td>
+                    <td style={{ padding: "7px 10px" }}><Badge status={r.status} /></td>
+                  </tr>
+                ))}</tbody>
+              </table>
+            </div>
+          )}
+        </div>
+        );
+      })()}
 
       {/* ── Monthly Overview ── */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
