@@ -314,6 +314,7 @@ function Analytics({ records, user }) {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
   const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
   const [drill, setDrill] = useState(null);
+  const [analyticsTeam, setAnalyticsTeam] = useState("");
 
   // Week state: store the Monday of the selected week
   const getMonday = (dateStr) => {
@@ -326,6 +327,21 @@ function Analytics({ records, user }) {
   const [weekStart, setWeekStart] = useState(getMonday(new Date().toISOString().slice(0, 10)));
   const [weekDrill, setWeekDrill] = useState(null);
 
+  // Build team mapping
+  const isManager = MANAGERS.includes(user);
+  const leadTeams = {};
+  LEADS.forEach(l => { leadTeams[l] = []; });
+  Object.entries(TEAM_MAP).forEach(([emp, lead]) => {
+    if (!LEADS.includes(emp) && !MANAGERS.includes(emp)) {
+      if (!leadTeams[lead]) leadTeams[lead] = [];
+      leadTeams[lead].push(emp);
+    }
+  });
+
+  // Filter records by team
+  const teamMembers = analyticsTeam ? (leadTeams[analyticsTeam] || []) : null;
+  const filteredRecords = teamMembers ? records.filter(r => teamMembers.includes(r.name)) : records;
+
   const parseToISO = (ds) => toISO(ds);
 
   const isOnLeave = (record, dateISO) => {
@@ -336,9 +352,9 @@ function Analytics({ records, user }) {
     return dateISO >= s && dateISO <= e;
   };
 
-  const offOnDate = records.filter(r => isOnLeave(r, selectedDate));
+  const offOnDate = filteredRecords.filter(r => isOnLeave(r, selectedDate));
 
-  const monthRecords = records.filter(r => {
+  const monthRecords = filteredRecords.filter(r => {
     if (r.status === "Rejected") return false;
     const s = parseToISO(r.startDate);
     return s && s.startsWith(selectedMonth);
@@ -351,7 +367,7 @@ function Analytics({ records, user }) {
     const dt = new Date(iso + "T00:00:00");
     const dayOfWeek = dt.getDay();
     if (dayOfWeek === 0 || dayOfWeek === 6) continue;
-    const offList = records.filter(r => isOnLeave(r, iso));
+    const offList = filteredRecords.filter(r => isOnLeave(r, iso));
     dailyCounts.push({ date: iso, day: d, dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][dayOfWeek], count: offList.length, records: offList });
   }
   const peakDay = dailyCounts.reduce((max, d) => d.count > max.count ? d : max, { count: 0, records: [] });
@@ -366,7 +382,7 @@ function Analytics({ records, user }) {
     typeBreakdown[r.type].records.push(r);
   });
 
-  const extendedLeaves = records.filter(r => r.status !== "Rejected" && Number(r.days) >= 3).sort((a, b) => {
+  const extendedLeaves = filteredRecords.filter(r => r.status !== "Rejected" && Number(r.days) >= 3).sort((a, b) => {
     const da = toISO(a.startDate) || "", db = toISO(b.startDate) || "";
     return db.localeCompare(da);
   });
@@ -450,7 +466,27 @@ function Analytics({ records, user }) {
   return (
     <div>
       <h2 style={{ fontSize: 20, fontWeight: 800, marginBottom: 4 }}>Leave Analytics</h2>
-      <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: 20 }}>Click any card or day for drill-down details.</p>
+      <p style={{ fontSize: 13, color: "var(--muted)", marginBottom: isManager ? 12 : 20 }}>Click any card or day for drill-down details.{analyticsTeam && " Showing: " + analyticsTeam + "'s team"}</p>
+
+      {/* Team filter buttons (Managers only) */}
+      {isManager && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 16, flexWrap: "wrap", alignItems: "center" }}>
+          <button onClick={() => { setAnalyticsTeam(""); setDrill(null); setWeekDrill(null); }}
+            style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+              border: !analyticsTeam ? "1px solid var(--accent)" : "1px solid var(--border)",
+              background: !analyticsTeam ? "var(--accent)" : "transparent",
+              color: !analyticsTeam ? "#fff" : "var(--muted)",
+            }}>All Teams</button>
+          {LEADS.filter(l => (leadTeams[l] || []).length > 0).map(l => (
+            <button key={l} onClick={() => { setAnalyticsTeam(l); setDrill(null); setWeekDrill(null); }}
+              style={{ padding: "5px 12px", borderRadius: 6, fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit",
+                border: analyticsTeam === l ? "1px solid var(--accent)" : "1px solid var(--border)",
+                background: analyticsTeam === l ? "var(--accent)" : "transparent",
+                color: analyticsTeam === l ? "#fff" : "var(--muted)",
+              }}>{l.split(" ")[0]} ({(leadTeams[l] || []).length})</button>
+          ))}
+        </div>
+      )}
 
       {/* ── Daily Check ── */}
       <div style={{ ...cardStyle, marginBottom: 16 }}>
@@ -500,11 +536,11 @@ function Analytics({ records, user }) {
           const d = new Date(weekStart + "T00:00:00");
           d.setDate(d.getDate() + i);
           const iso = d.toISOString().slice(0, 10);
-          const offList = records.filter(r => isOnLeave(r, iso));
+          const offList = filteredRecords.filter(r => isOnLeave(r, iso));
           wDays.push({ iso, dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()], day: d.getDate(), month: d.getMonth() + 1, records: offList });
         }
         const weekEnd = wDays[4].iso;
-        const weekReqs = records.filter(r => {
+        const weekReqs = filteredRecords.filter(r => {
           if (r.status === "Rejected") return false;
           const s = parseToISO(r.startDate);
           return s && s >= weekStart && s <= weekEnd;
