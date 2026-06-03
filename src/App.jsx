@@ -200,7 +200,10 @@ function TypeBadge({ type }) {
 
 // ═══ EDIT MODAL ═══
 function EditModal({ record, onSave, onClose }) {
-  const [f, setF] = useState({ ...record, _s: toISO(record.startDate), _e: toISO(record.endDate) });
+  // Auto-recalculate Mat/Pat with calendar days on open
+  const _isInitMP = record.type && (record.type.includes("Maternity") || record.type.includes("Paternity"));
+  const initDays = _isInitMP ? (calcCalDays(toISO(record.startDate), toISO(record.endDate)) || record.days) : record.days;
+  const [f, setF] = useState({ ...record, days: initDays, _s: toISO(record.startDate), _e: toISO(record.endDate) });
   const S = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" };
 
   const isMP = f.type && (f.type.includes("Maternity") || f.type.includes("Paternity"));
