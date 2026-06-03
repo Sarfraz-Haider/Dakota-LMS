@@ -154,6 +154,11 @@ function toISO(ds) {
   return "";
 }
 
+// Format local date to YYYY-MM-DD without UTC conversion
+function localISO(d) {
+  return d.getFullYear() + "-" + String(d.getMonth() + 1).padStart(2, "0") + "-" + String(d.getDate()).padStart(2, "0");
+}
+
 function calcWorkDays(s, e) {
   if (!s || !e) return 0;
   const si = toISO(s), ei = toISO(e);
@@ -163,6 +168,16 @@ function calcWorkDays(s, e) {
   let c = 0; const cur = new Date(sd);
   while (cur <= ed) { const day = cur.getDay(); if (day !== 0 && day !== 6) c++; cur.setDate(cur.getDate() + 1); }
   return c;
+}
+
+// Calendar days (includes weekends) for Maternity/Paternity
+function calcCalDays(s, e) {
+  if (!s || !e) return 0;
+  const si = toISO(s), ei = toISO(e);
+  if (!si || !ei) return 0;
+  const sd = new Date(si + "T00:00:00"), ed = new Date(ei + "T00:00:00");
+  if (isNaN(sd) || isNaN(ed) || ed < sd) return 0;
+  return Math.round((ed - sd) / (1000 * 60 * 60 * 24)) + 1;
 }
 
 function Badge({ status }) {
@@ -221,7 +236,16 @@ function RequestForm({ user, records, onSubmit, loading }) {
   const used = getUsed(records, user);
   const S = { width: "100%", padding: "10px 14px", borderRadius: 10, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", fontSize: 14, fontFamily: "inherit" };
 
-  const chDate = (k, v) => { const nf = { ...f, [k]: v }; const wd = calcWorkDays(nf.startDate, nf.endDate); if (wd > 0) nf.days = nf.halfDay === "Yes" && wd === 1 ? 0.5 : wd; setF(nf); };
+  const isMatPat = (type) => type && (type.includes("Maternity") || type.includes("Paternity"));
+
+  const recalcDays = (nf) => {
+    const days = isMatPat(nf.type) ? calcCalDays(nf.startDate, nf.endDate) : calcWorkDays(nf.startDate, nf.endDate);
+    if (days > 0) nf.days = (!isMatPat(nf.type) && nf.halfDay === "Yes" && days === 1) ? 0.5 : days;
+    return nf;
+  };
+
+  const chDate = (k, v) => { const nf = recalcDays({ ...f, [k]: v }); setF(nf); };
+  const chType = (v) => { const nf = recalcDays({ ...f, type: v }); setF(nf); };
 
   const submit = () => {
     setErr("");
@@ -293,10 +317,10 @@ function RequestForm({ user, records, onSubmit, loading }) {
           <div><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Start Date *</div><input type="date" value={f.startDate} onChange={e => chDate("startDate", e.target.value)} style={S} /></div>
           <div><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>End Date *</div><input type="date" value={f.endDate} onChange={e => chDate("endDate", e.target.value)} style={S} /></div>
         </div>
-        <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Leave Type *</div><select value={f.type} onChange={e => setF({ ...f, type: e.target.value })} style={{ ...S, appearance: "auto" }}><option value="">Choose...</option>{LEAVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select></div>
+        <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Leave Type *</div><select value={f.type} onChange={e => chType(e.target.value)} style={{ ...S, appearance: "auto" }}><option value="">Choose...</option>{LEAVE_TYPES.map(t => <option key={t} value={t}>{t}</option>)}</select>{isMatPat(f.type) && <div style={{ fontSize: 11, color: "#8b5cf6", marginTop: 4, fontWeight: 600 }}>ℹ️ Mat/Pat leave includes weekends (calendar days)</div>}</div>
         <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14, marginBottom: 14 }}>
           <div><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Days (auto-calculated) *</div><input type="number" step="0.5" min="0.5" value={f.days} onChange={e => setF({ ...f, days: e.target.value })} style={{ ...S, background: "rgba(0,155,141,0.08)", fontWeight: 700 }} /></div>
-          <div><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Half Day?</div><select value={f.halfDay} onChange={e => { const v = e.target.value; const wd = calcWorkDays(f.startDate, f.endDate); setF({ ...f, halfDay: v, days: v === "Yes" && wd === 1 ? 0.5 : wd || f.days }); }} style={{ ...S, appearance: "auto" }}><option value="">No</option><option value="Yes">Yes</option></select></div>
+          <div><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Half Day?</div><select value={f.halfDay} onChange={e => { const v = e.target.value; const days = isMatPat(f.type) ? calcCalDays(f.startDate, f.endDate) : calcWorkDays(f.startDate, f.endDate); setF({ ...f, halfDay: v, days: (!isMatPat(f.type) && v === "Yes" && days === 1) ? 0.5 : days || f.days }); }} style={{ ...S, appearance: "auto" }}><option value="">No</option><option value="Yes">Yes</option></select></div>
         </div>
         <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>WorkStream Lead *</div><select value={f.lead} onChange={e => setF({ ...f, lead: e.target.value })} style={{ ...S, appearance: "auto" }}><option value="">Choose...</option>{LEADS.map(l => <option key={l} value={l}>{l}</option>)}</select></div>
         <div style={{ marginBottom: 14 }}><div style={{ fontSize: 12, fontWeight: 600, color: "var(--muted)", marginBottom: 6 }}>Comments</div><textarea value={f.comments} onChange={e => setF({ ...f, comments: e.target.value })} rows={2} style={{ ...S, resize: "vertical" }} placeholder="Reason..." /></div>
@@ -311,8 +335,8 @@ function RequestForm({ user, records, onSubmit, loading }) {
 
 // ═══ ANALYTICS (Managers/Leads) ═══
 function Analytics({ records, user }) {
-  const [selectedDate, setSelectedDate] = useState(new Date().toISOString().slice(0, 10));
-  const [selectedMonth, setSelectedMonth] = useState(new Date().toISOString().slice(0, 7));
+  const [selectedDate, setSelectedDate] = useState(localISO(new Date()));
+  const [selectedMonth, setSelectedMonth] = useState(localISO(new Date()).slice(0, 7));
   const [drill, setDrill] = useState(null);
   const [analyticsTeam, setAnalyticsTeam] = useState("");
 
@@ -322,9 +346,9 @@ function Analytics({ records, user }) {
     const day = d.getDay();
     const diff = d.getDate() - day + (day === 0 ? -6 : 1);
     d.setDate(diff);
-    return d.toISOString().slice(0, 10);
+    return localISO(d);
   };
-  const [weekStart, setWeekStart] = useState(getMonday(new Date().toISOString().slice(0, 10)));
+  const [weekStart, setWeekStart] = useState(getMonday(localISO(new Date())));
   const [weekDrill, setWeekDrill] = useState(null);
 
   // Build team mapping
@@ -535,7 +559,7 @@ function Analytics({ records, user }) {
         for (let i = 0; i < 5; i++) {
           const d = new Date(weekStart + "T00:00:00");
           d.setDate(d.getDate() + i);
-          const iso = d.toISOString().slice(0, 10);
+          const iso = localISO(d);
           const offList = filteredRecords.filter(r => isOnLeave(r, iso));
           wDays.push({ iso, dayName: ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"][d.getDay()], day: d.getDate(), month: d.getMonth() + 1, records: offList });
         }
@@ -549,9 +573,9 @@ function Analytics({ records, user }) {
         const weekUniqueOff = [...new Set(wDays.flatMap(d => d.records.map(r => r.name)))].length;
         const weekPeak = wDays.reduce((max, d) => d.records.length > max.count ? { ...d, count: d.records.length } : max, { count: 0 });
 
-        const prevWeek = () => { const d = new Date(weekStart + "T00:00:00"); d.setDate(d.getDate() - 7); setWeekStart(d.toISOString().slice(0, 10)); setWeekDrill(null); };
-        const nextWeek = () => { const d = new Date(weekStart + "T00:00:00"); d.setDate(d.getDate() + 7); setWeekStart(d.toISOString().slice(0, 10)); setWeekDrill(null); };
-        const thisWeek = () => { setWeekStart(getMonday(new Date().toISOString().slice(0, 10))); setWeekDrill(null); };
+        const prevWeek = () => { const d = new Date(weekStart + "T00:00:00"); d.setDate(d.getDate() - 7); setWeekStart(localISO(d)); setWeekDrill(null); };
+        const nextWeek = () => { const d = new Date(weekStart + "T00:00:00"); d.setDate(d.getDate() + 7); setWeekStart(localISO(d)); setWeekDrill(null); };
+        const thisWeek = () => { setWeekStart(getMonday(localISO(new Date()))); setWeekDrill(null); };
 
         return (
         <div style={{ ...cardStyle, marginBottom: 16 }}>
