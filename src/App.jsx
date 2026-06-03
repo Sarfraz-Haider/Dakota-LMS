@@ -95,9 +95,12 @@ function getRole(n) {
 function getUsed(recs, name) {
   const u = { Annual: 0, Casual: 0, Sick: 0, Maternity: 0, Bereavement: 0 };
   recs.filter(r => r.name === name && r.status !== "Rejected").forEach(r => {
-    if (u[r.type] !== undefined) u[r.type] += Number(r.days) || 0;
-    else if (r.type && r.type.includes("Maternity")) u.Maternity += Number(r.days) || 0;
-    else if (r.type && r.type.includes("Bereavement")) u.Bereavement += Number(r.days) || 0;
+    const isMP = r.type && (r.type.includes("Maternity") || r.type.includes("Paternity"));
+    const isBR = r.type && r.type.includes("Bereavement");
+    const days = isMP ? (calcCalDays(r.startDate, r.endDate) || Number(r.days) || 0) : (Number(r.days) || 0);
+    if (u[r.type] !== undefined) u[r.type] += days;
+    else if (isMP) u.Maternity += days;
+    else if (isBR) u.Bereavement += days;
   });
   return u;
 }
@@ -196,6 +199,15 @@ function TypeBadge({ type }) {
       <span style={{ padding: "1px 7px", borderRadius: 4, background: color + "20", color: color, fontSize: 10, fontWeight: 700 }}>⚡ {shortName}</span>
     </span>
   ) : <span>{type}</span>;
+}
+
+// Auto-correct displayed days for Mat/Pat (calendar days including weekends)
+function displayDays(r) {
+  if (r.type && (r.type.includes("Maternity") || r.type.includes("Paternity"))) {
+    const cd = calcCalDays(r.startDate, r.endDate);
+    if (cd > 0) return cd;
+  }
+  return r.days;
 }
 
 // ═══ EDIT MODAL ═══
@@ -454,7 +466,7 @@ function Analytics({ records, user }) {
                 <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                   <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
                   <td style={{ padding: "7px 10px" }}><TypeBadge type={r.type} /></td>
-                  <td style={{ padding: "7px 10px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
+                  <td style={{ padding: "7px 10px" }}>{displayDays(r)}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                   <td style={{ padding: "7px 10px", fontSize: 11, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                   <td style={{ padding: "7px 10px", fontSize: 11 }}>{r.lead}</td>
                   <td style={{ padding: "7px 10px" }}><Badge status={r.status} /></td>
@@ -546,7 +558,7 @@ function Analytics({ records, user }) {
                 <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                   <td style={{ padding: "8px 12px", fontWeight: 600 }}>{r.name}</td>
                   <td style={{ padding: "8px 12px" }}><TypeBadge type={r.type} /></td>
-                  <td style={{ padding: "8px 12px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
+                  <td style={{ padding: "8px 12px" }}>{displayDays(r)}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                   <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                   <td style={{ padding: "8px 12px", fontSize: 12 }}>{r.lead}</td>
                   <td style={{ padding: "8px 12px" }}><Badge status={r.status} /></td>
@@ -665,7 +677,7 @@ function Analytics({ records, user }) {
                   <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                     <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "7px 10px" }}><TypeBadge type={r.type} /></td>
-                    <td style={{ padding: "7px 10px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
+                    <td style={{ padding: "7px 10px" }}>{displayDays(r)}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                     <td style={{ padding: "7px 10px", fontSize: 11, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "7px 10px", fontSize: 11 }}>{r.lead}</td>
                     <td style={{ padding: "7px 10px" }}><Badge status={r.status} /></td>
@@ -820,7 +832,7 @@ function Analytics({ records, user }) {
                         fontWeight: 700, padding: "2px 8px", borderRadius: 6, fontSize: 12,
                         background: Number(r.days) >= 10 ? "rgba(239,68,68,0.15)" : Number(r.days) >= 5 ? "rgba(245,158,11,0.15)" : "var(--accent-bg)",
                         color: Number(r.days) >= 10 ? "#ef4444" : Number(r.days) >= 5 ? "#d97706" : "var(--accent)",
-                      }}>{r.days}d</span>
+                      }}>{displayDays(r)}d</span>
                     </td>
                     <td style={{ padding: "8px 12px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "8px 12px", fontSize: 12 }}>{r.lead}</td>
@@ -1219,7 +1231,7 @@ export default function DakotaLMS() {
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}><TypeBadge type={r.type} /></td>
-                    <td style={{ padding: "8px 14px" }}>{r.days}</td>
+                    <td style={{ padding: "8px 14px" }}>{displayDays(r)}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
                     <td style={{ padding: "8px 14px" }}><Badge status={r.status} /></td>
@@ -1242,7 +1254,7 @@ export default function DakotaLMS() {
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
-                    <td style={{ padding: "8px 14px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
+                    <td style={{ padding: "8px 14px" }}>{displayDays(r)}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
                     <td style={{ padding: "8px 14px" }}><Badge status={r.status} /></td>
                     <td style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>{r.comments}</td>
@@ -1263,7 +1275,7 @@ export default function DakotaLMS() {
                 <div style={{ display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 10 }}>
                   <div>
                     <div style={{ fontSize: 15, fontWeight: 700 }}>{r.name}</div>
-                    <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{r.type} · {r.days}d · {dispDate(r.startDate)} → {dispDate(r.endDate)}</div>
+                    <div style={{ fontSize: 13, color: "var(--muted)", marginTop: 2 }}>{r.type} · {displayDays(r)}d · {dispDate(r.startDate)} → {dispDate(r.endDate)}</div>
                     {r.comments && <div style={{ fontSize: 12, color: "var(--muted)", marginTop: 3, fontStyle: "italic" }}>{r.comments}</div>}
                     <div style={{ fontSize: 11, color: "var(--muted)", marginTop: 4 }}>Bal: A{eu.Annual}/{BAL.Annual} C{eu.Casual}/{BAL.Casual} S{eu.Sick}/{BAL.Sick}</div>
                   </div>
@@ -1461,7 +1473,7 @@ export default function DakotaLMS() {
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "8px 14px" }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
-                    <td style={{ padding: "8px 14px" }}>{r.days}</td>
+                    <td style={{ padding: "8px 14px" }}>{displayDays(r)}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
                     <td style={{ padding: "8px 14px" }}><Badge status={r.status} /></td>
                     <td style={{ padding: "8px 14px" }}>
