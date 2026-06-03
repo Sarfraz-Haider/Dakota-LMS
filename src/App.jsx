@@ -186,14 +186,28 @@ function Badge({ status }) {
   return <span style={{ fontSize: 11, fontWeight: 600, padding: "3px 10px", borderRadius: 20, background: s.bg, color: s.c }}>{status || "Pending"}</span>;
 }
 
+// Special leave type display with flag
+function TypeBadge({ type }) {
+  const isSpecial = type && (type.includes("Maternity") || type.includes("Bereavement"));
+  const color = type && type.includes("Maternity") ? "#8b5cf6" : type && type.includes("Bereavement") ? "#ec4899" : "var(--text)";
+  const shortName = type && type.includes("Maternity") ? "Mat/Pat" : type && type.includes("Bereavement") ? "Bereavement" : type;
+  return isSpecial ? (
+    <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
+      <span style={{ padding: "1px 7px", borderRadius: 4, background: color + "20", color: color, fontSize: 10, fontWeight: 700 }}>⚡ {shortName}</span>
+    </span>
+  ) : <span>{type}</span>;
+}
+
 // ═══ EDIT MODAL ═══
 function EditModal({ record, onSave, onClose }) {
   const [f, setF] = useState({ ...record, _s: toISO(record.startDate), _e: toISO(record.endDate) });
   const S = { width: "100%", padding: "9px 12px", borderRadius: 8, border: "1px solid var(--border)", background: "var(--bg)", color: "var(--text)", fontSize: 13, fontFamily: "inherit" };
 
+  const isMP = f.type && (f.type.includes("Maternity") || f.type.includes("Paternity"));
   const chDate = (field, v) => {
     const nf = { ...f }; if (field === "s") { nf._s = v; nf.startDate = fromISO(v); } else { nf._e = v; nf.endDate = fromISO(v); }
-    const wd = calcWorkDays(nf._s, nf._e); if (wd > 0) nf.days = nf.halfDay === "Yes" && wd === 1 ? 0.5 : wd;
+    const days = isMP ? calcCalDays(nf._s, nf._e) : calcWorkDays(nf._s, nf._e);
+    if (days > 0) nf.days = (!isMP && nf.halfDay === "Yes" && days === 1) ? 0.5 : days;
     setF(nf);
   };
 
@@ -414,18 +428,6 @@ function Analytics({ records, user }) {
   const cardStyle = { background: "var(--card)", borderRadius: 12, padding: "16px 20px", border: "1px solid var(--border)" };
 
   // Drill-down detail table
-  // Special leave type display with flag
-  const TypeBadge = ({ type }) => {
-    const isSpecial = type && (type.includes("Maternity") || type.includes("Bereavement"));
-    const color = type && type.includes("Maternity") ? "#8b5cf6" : type && type.includes("Bereavement") ? "#ec4899" : "var(--text)";
-    const shortName = type && type.includes("Maternity") ? "Mat/Pat" : type && type.includes("Bereavement") ? "Bereavement" : type;
-    return isSpecial ? (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
-        <span style={{ padding: "1px 7px", borderRadius: 4, background: color + "20", color: color, fontSize: 10, fontWeight: 700 }}>⚡ {shortName}</span>
-      </span>
-    ) : <span>{type}</span>;
-  };
-
   const DrillPanel = ({ title, data, onClose }) => (
     <div style={{ ...cardStyle, marginTop: 12, border: "1px solid var(--accent)", background: "var(--hover)" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
@@ -1213,7 +1215,7 @@ export default function DakotaLMS() {
                 <tbody>{applyFilters(dashRecs, dashFilters).slice(-15).reverse().map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
-                    <td style={{ padding: "8px 14px" }}>{r.type}</td>
+                    <td style={{ padding: "8px 14px" }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "8px 14px" }}>{r.days}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12, color: "var(--muted)" }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
@@ -1235,7 +1237,7 @@ export default function DakotaLMS() {
                 <thead><tr style={{ background: "var(--hover)" }}>{["Type", "Period", "Days", "Lead", "Status", "Note"].map(h => <th key={h} style={{ padding: "8px 14px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 11 }}>{h}</th>)}</tr></thead>
                 <tbody>{myRecs.slice().reverse().map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
-                    <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.type}</td>
+                    <td style={{ padding: "8px 14px", fontWeight: 600 }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "8px 14px" }}>{r.days}{r.halfDay === "Yes" ? " (½)" : ""}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
@@ -1454,7 +1456,7 @@ export default function DakotaLMS() {
                 <tbody>{applyFilters(records.filter(r => canManage(r)), filters).slice().reverse().slice(0, 50).map((r, i) => (
                   <tr key={i} style={{ borderTop: "1px solid var(--border)" }}>
                     <td style={{ padding: "8px 14px", fontWeight: 600 }}>{r.name}</td>
-                    <td style={{ padding: "8px 14px" }}>{r.type}</td>
+                    <td style={{ padding: "8px 14px" }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{dispDate(r.startDate)} → {dispDate(r.endDate)}</td>
                     <td style={{ padding: "8px 14px" }}>{r.days}</td>
                     <td style={{ padding: "8px 14px", fontSize: 12 }}>{r.lead}</td>
