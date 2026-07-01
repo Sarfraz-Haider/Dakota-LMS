@@ -3,7 +3,7 @@ import { useState, useRef, useEffect } from "react";
 const MANAGERS = ["Farhan Farrukh", "Sarfraz Haider", "Haad Khan", "Muhammad Maaz"];
 const LEADS = ["Sarfraz Haider", "Faraz Anjum", "Haad Khan", "Nasir Ahmad", "Naveed Zafar", "Misbah Qureshi", "Farhan Farrukh", "Majid Zulfiqar"];
 const EMPLOYEES = ["Farhan Farrukh","Haad Khan","Khizar Masood","Mahnoor Qureshi","Muhammad Maaz","Mubashar Hassan","Misbah Qureshi","Nasir Mehmood","Sarfraz Haider","Abdul Wasay Bin Zahid","Atif Ilyas","Fahad Shah","Faraz Anjum","Hamza Arshad","Ihtisham Khan","Jamal Khan","Majid Zulfiqar","Mehtab Shahid","Minal Haider","Muhammad Nabeel","Muhammad Umar Farooq","Naveed Zafar","Rafiq Ahmad","Rana Atif","Saad Sultan","Adil Khalid Abbasi","Faiq Lattifi","Hafsah Maqbool","Haseeb Tariq","Mansoor Ahmed","Muhammad Junaid","Muhammad Naseer","Nabeela Azhar","Nasir Ahmad","Yousaf Munir","Abdullah Zafar","Ahnan Ahmad","Ahsan Jamil","Asad Zarif Abbasi","Faheem Ullah","Faryal Zohaib","Haider Ali Shah","Hamza Rehman","Hassan Kiyani","Kanwal Talib","M Bilal Abbas","Muhammad Aamir Abbas","Muhammad Shahbaz","Muhammad Umer Nawaz","Muhammad Zubair Haider","Naima Iman","Qasim Umar","Rida Arshad","Zubair Khurshid","Sundas Arif","Syed Waqas","Adnan Ahmad"];
-const LEAVE_TYPES = ["Annual", "Casual", "Sick", "Bereavement leave (Immediate Family)", "Maternity/Paternity Leave"];
+const LEAVE_TYPES = ["Annual", "Casual", "Sick", "Maternity/Paternity Leave"];
 const BAL = { Annual: 14, Casual: 10, Sick: 10 };
 const MGR_PW = "dakota@mgr2026";
 const LEAD_PW = "dakota@lead2026";
@@ -93,14 +93,12 @@ function getRole(n) {
 }
 
 function getUsed(recs, name) {
-  const u = { Annual: 0, Casual: 0, Sick: 0, Maternity: 0, Bereavement: 0 };
+  const u = { Annual: 0, Casual: 0, Sick: 0, Maternity: 0 };
   recs.filter(r => r.name === name && r.status !== "Rejected").forEach(r => {
     const isMP = r.type && (r.type.includes("Maternity") || r.type.includes("Paternity"));
-    const isBR = r.type && r.type.includes("Bereavement");
     const days = isMP ? (calcCalDays(r.startDate, r.endDate) || Number(r.days) || 0) : (Number(r.days) || 0);
     if (u[r.type] !== undefined) u[r.type] += days;
     else if (isMP) u.Maternity += days;
-    else if (isBR) u.Bereavement += days;
   });
   return u;
 }
@@ -191,9 +189,9 @@ function Badge({ status }) {
 
 // Special leave type display with flag
 function TypeBadge({ type }) {
-  const isSpecial = type && (type.includes("Maternity") || type.includes("Bereavement"));
-  const color = type && type.includes("Maternity") ? "#8b5cf6" : type && type.includes("Bereavement") ? "#ec4899" : "var(--text)";
-  const shortName = type && type.includes("Maternity") ? "Mat/Pat" : type && type.includes("Bereavement") ? "Bereavement" : type;
+  const isSpecial = type && type.includes("Maternity");
+  const color = type && type.includes("Maternity") ? "#8b5cf6" : "var(--text)";
+  const shortName = type && type.includes("Maternity") ? "Mat/Pat" : type;
   return isSpecial ? (
     <span style={{ display: "inline-flex", alignItems: "center", gap: 4 }}>
       <span style={{ padding: "1px 7px", borderRadius: 4, background: color + "20", color: color, fontSize: 10, fontWeight: 700 }}>⚡ {shortName}</span>
@@ -463,7 +461,7 @@ function Analytics({ records, user }) {
             </thead>
             <tbody>
               {data.map((r, i) => (
-                <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
+                <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                   <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
                   <td style={{ padding: "7px 10px" }}><TypeBadge type={r.type} /></td>
                   <td style={{ padding: "7px 10px" }}>{displayDays(r)}{r.halfDay === "Yes" ? " (½)" : ""}</td>
@@ -555,7 +553,7 @@ function Analytics({ records, user }) {
             </thead>
             <tbody>
               {offOnDate.map((r, i) => (
-                <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
+                <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                   <td style={{ padding: "8px 12px", fontWeight: 600 }}>{r.name}</td>
                   <td style={{ padding: "8px 12px" }}><TypeBadge type={r.type} /></td>
                   <td style={{ padding: "8px 12px" }}>{displayDays(r)}{r.halfDay === "Yes" ? " (½)" : ""}</td>
@@ -674,7 +672,7 @@ function Analytics({ records, user }) {
                   ))}
                 </tr></thead>
                 <tbody>{weekDrill.records.map((r, i) => (
-                  <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity") || r.type.includes("Bereavement"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
+                  <tr key={i} style={{ borderTop: "1px solid var(--border)", background: (r.type && (r.type.includes("Maternity"))) ? "rgba(139,92,246,0.05)" : "transparent" }}>
                     <td style={{ padding: "7px 10px", fontWeight: 600 }}>{r.name}</td>
                     <td style={{ padding: "7px 10px" }}><TypeBadge type={r.type} /></td>
                     <td style={{ padding: "7px 10px" }}>{displayDays(r)}{r.halfDay === "Yes" ? " (½)" : ""}</td>
@@ -1319,7 +1317,7 @@ export default function DakotaLMS() {
             return true;
           });
 
-          const teamTotal = filtered.reduce((s, d) => ({ a: s.a + d.Annual, c: s.c + d.Casual, si: s.si + d.Sick, m: s.m + d.Maternity, b: s.b + d.Bereavement }), { a: 0, c: 0, si: 0, m: 0, b: 0 });
+          const teamTotal = filtered.reduce((s, d) => ({ a: s.a + d.Annual, c: s.c + d.Casual, si: s.si + d.Sick, m: s.m + d.Maternity }), { a: 0, c: 0, si: 0, m: 0 });
 
           return (
           <div>
@@ -1393,7 +1391,6 @@ export default function DakotaLMS() {
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Sick</th>
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Left</th>
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#8b5cf6", fontSize: 10, borderLeft: "2px solid var(--border)" }}>Mat/Pat</th>
-                  <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "#ec4899", fontSize: 10 }}>Bereave</th>
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10, borderLeft: "2px solid var(--border)" }}>Total Leaves</th>
                   <th style={{ padding: "8px 12px", textAlign: "left", fontWeight: 600, color: "var(--muted)", fontSize: 10 }}>Total Left</th>
                 </tr></thead>
@@ -1412,7 +1409,6 @@ export default function DakotaLMS() {
                     <td style={{ padding: "8px 12px" }}>{d.Sick}</td>
                     <td style={{ padding: "8px 12px", fontWeight: 600, color: BAL.Sick - d.Sick <= 2 ? "#ef4444" : BAL.Sick - d.Sick <= 4 ? "#d97706" : "var(--accent)" }}>{BAL.Sick - d.Sick}</td>
                     <td style={{ padding: "8px 12px", fontWeight: 600, borderLeft: "2px solid var(--border)", color: d.Maternity > 0 ? "#8b5cf6" : "var(--muted)" }}>{d.Maternity || "—"}</td>
-                    <td style={{ padding: "8px 12px", fontWeight: 600, color: d.Bereavement > 0 ? "#ec4899" : "var(--muted)" }}>{d.Bereavement || "—"}</td>
                     <td style={{ padding: "8px 12px", fontWeight: 700, borderLeft: "2px solid var(--border)" }}>{totalTaken}</td>
                     <td style={{ padding: "8px 12px", fontWeight: 700, color: totalLeft < 5 ? "#ef4444" : totalLeft < 10 ? "#d97706" : "var(--accent)" }}>{totalLeft}</td>
                   </tr>
@@ -1430,7 +1426,6 @@ export default function DakotaLMS() {
                       <td style={{ padding: "8px 12px", fontWeight: 700 }}>{teamTotal.si}</td>
                       <td style={{ padding: "8px 12px" }}></td>
                       <td style={{ padding: "8px 12px", fontWeight: 700, borderLeft: "2px solid var(--border)", color: "#8b5cf6" }}>{teamTotal.m || "—"}</td>
-                      <td style={{ padding: "8px 12px", fontWeight: 700, color: "#ec4899" }}>{teamTotal.b || "—"}</td>
                       <td style={{ padding: "8px 12px", fontWeight: 800, borderLeft: "2px solid var(--border)" }}>{teamTotal.a + teamTotal.c + teamTotal.si}</td>
                       <td style={{ padding: "8px 12px" }}></td>
                     </tr>
