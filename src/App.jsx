@@ -2,7 +2,7 @@ import { useState, useRef, useEffect } from "react";
 
 const MANAGERS = ["Farhan Farrukh", "Sarfraz Haider", "Haad Khan", "Muhammad Maaz"];
 const LEADS = ["Sarfraz Haider", "Faraz Anjum", "Haad Khan", "Nasir Ahmad", "Naveed Zafar", "Misbah Qureshi", "Farhan Farrukh", "Majid Zulfiqar"];
-const EMPLOYEES = ["Farhan Farrukh","Haad Khan","Khizar Masood","Mahnoor Qureshi","Muhammad Maaz","Mubashar Hassan","Misbah Qureshi","Nasir Mehmood","Sarfraz Haider","Abdul Wasay Bin Zahid","Atif Ilyas","Fahad Shah","Faraz Anjum","Hamza Arshad","Ihtisham Khan","Jamal Khan","Majid Zulfiqar","Mehtab Shahid","Minal Haider","Muhammad Nabeel","Muhammad Umar Farooq","Naveed Zafar","Rafiq Ahmad","Rana Atif","Saad Sultan","Adil Khalid Abbasi","Faiq Lattifi","Hafsah Maqbool","Haseeb Tariq","Mansoor Ahmed","Muhammad Junaid","Muhammad Naseer","Nabeela Azhar","Nasir Ahmad","Yousaf Munir","Abdullah Zafar","Ahnan Ahmad","Ahsan Jamil","Asad Zarif Abbasi","Faheem Ullah","Faryal Zohaib","Haider Ali Shah","Hamza Rehman","Hassan Kiyani","Kanwal Talib","M Bilal Abbas","Muhammad Aamir Abbas","Muhammad Shahbaz","Muhammad Umer Nawaz","Muhammad Zubair Haider","Naima Iman","Qasim Umar","Rida Arshad","Zubair Khurshid","Sundas Arif","Syed Waqas","Adnan Ahmad"];
+const EMPLOYEES = ["Farhan Farrukh","Haad Khan","Khizar Masood","Mahnoor Qureshi","Muhammad Maaz","Mubashar Hassan","Misbah Qureshi","Nasir Mehmood","Sarfraz Haider","Abdul Wasay Bin Zahid","Atif Ilyas","Fahad Shah","Faraz Anjum","Hamza Arshad","Ihtisham Khan","Jamal Khan","Majid Zulfiqar","Mehtab Shahid","Minal Haider","Muhammad Nabeel","Muhammad Umar Farooq","Naveed Zafar","Rafiq Ahmad","Rana Atif","Saad Sultan","Adil Khalid Abbasi","Faiq Lattifi","Hafsah Maqbool","Haseeb Tariq","Mansoor Ahmed","Muhammad Junaid","Muhammad Naseer","Nabeela Azhar","Nasir Ahmad","Yousaf Munir","Abdullah Zafar","Ahsan Jamil","Asad Zarif Abbasi","Faheem Ullah","Faryal Zohaib","Haider Ali Shah","Hamza Rehman","Hassan Kiyani","Kanwal Talib","M Bilal Abbas","Muhammad Aamir Abbas","Muhammad Shahbaz","Muhammad Umer Nawaz","Muhammad Zubair Haider","Naima Iman","Qasim Umar","Rida Arshad","Zubair Khurshid","Sundas Arif","Syed Waqas","Adnan Ahmad"];
 const LEAVE_TYPES = ["Annual", "Casual", "Sick", "Maternity/Paternity Leave"];
 const BAL = { Annual: 14, Casual: 10, Sick: 10 };
 const MGR_PW = "dakota@mgr2026";
@@ -59,7 +59,6 @@ const TEAM_MAP = {
   "Faryal Zohaib": "Misbah Qureshi",
   "Haider Ali Shah": "Misbah Qureshi",
   "Hassan Kiyani": "Misbah Qureshi",
-  "Ahnan Ahmad": "Misbah Qureshi",
 
   // Nasir Ahmad's team
   "Minal Haider": "Nasir Ahmad",
@@ -1006,7 +1005,20 @@ export default function DakotaLMS() {
       const r = await fetch(API_URL, { redirect: "follow" });
       const text = await r.text();
       const d = JSON.parse(text);
-      if (d.success && d.records) { setRecords(d.records); setFetchErr(""); }
+      if (d.success && d.records) {
+        // Auto-calculate days for records missing them (e.g. Slack submissions)
+        const processed = d.records.map(r => {
+          if ((!r.days || Number(r.days) === 0) && r.startDate && r.endDate) {
+            const isMP = r.type && (r.type.includes("Maternity") || r.type.includes("Paternity"));
+            const autoDays = isMP ? calcCalDays(r.startDate, r.endDate) : calcWorkDays(r.startDate, r.endDate);
+            if (r.halfDay === "Yes" && !isMP && autoDays === 1) return { ...r, days: 0.5 };
+            if (autoDays > 0) return { ...r, days: autoDays };
+          }
+          return r;
+        });
+        setRecords(processed);
+        setFetchErr("");
+      }
       else { setFetchErr("API returned: " + (d.error || "unexpected response")); }
     } catch (e) {
       setFetchErr("Could not connect to Google Sheet: " + e.message);
